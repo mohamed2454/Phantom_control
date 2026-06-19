@@ -196,4 +196,4 @@ def run_web(): app.run(port=5000, debug=False, use_reloader=False)
 
 if __name__ == "__main__":
     threading.Thread(target=run_web, daemon=True).start()
-    bot.run("ضع_توكن_بوتك_هنا")
+    bot.run("MTQ5NzUzMzAxNTY3MTE3NzI0Ng.GLDmGQ.yTmOSKvEe_qBhfvwc39QuxBvgvkwBhZp9dZz0A")
