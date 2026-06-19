@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>Phantom Pro Dashboard</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --bg: #36393f; --card: #2f3136; --accent: #5865F2; --success: #3ba55c; --danger: #ed4245; }
+        body { font-family: 'Cairo', sans-serif; background: var(--bg); color: #dcddde; margin: 0; padding: 20px; }
+        .container { max-width: 1100px; margin: auto; }
+        .stats { display: flex; gap: 20px; margin-bottom: 20px; }
+        .stat-card { background: var(--card); padding: 15px; border-radius: 10px; flex: 1; text-align: center; border-bottom: 4px solid var(--accent); }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+        .card { background: var(--card); padding: 20px; border-radius: 12px; }
+        input, textarea { width: 100%; padding: 10px; margin: 10px 0; border-radius: 5px; border: none; background: #40444b; color: white; }
+        .btn { width: 100%; padding: 12px; border: none; border-radius: 5px; cursor: pointer; color: white; font-weight: bold; }
+        .btn-blue { background: var(--accent); } .btn-green { background: var(--success); } .btn-red { background: var(--danger); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 style="text-align: center;"><i class="fab fa-discord"></i> Phantom Pro Application</h1>
+        
+        <div class="stats">
+            <div class="stat-card">الأعضاء: {{ member_count }}</div>
+            <div class="stat-card">تذاكر مفتوحة: {{ open_tickets }}</div>
+            <div class="stat-card">Ping: {{ ping }}ms</div>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <h3>⚙️ إعدادات التذاكر واللوق</h3>
+                <form action="/update_settings" method="POST">
+                    <input type="text" name="guild_id" placeholder="ID السيرفر" required>
+                    <input type="text" name="admin_roles" placeholder="IDs الرتب (فصل بفاصلة ,)" required>
+                    <input type="text" name="channel_id" placeholder="ID قناة الزر" required>
+                    <input type="text" name="category_id" placeholder="ID القسم (Category)">
+                    <input type="text" name="log_channel" placeholder="ID قناة اللوق" required>
+                    <button type="submit" class="btn btn-blue">حفظ الإعدادات</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <h3>🤖 الردود التلقائية</h3>
+                <form action="/add_auto_reply" method="POST">
+                    <input type="text" name="keyword" placeholder="الكلمة" required>
+                    <input type="text" name="response" placeholder="الرد" required>
+                    <button type="submit" class="btn btn-green">إضافة رد</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <h3>🎮 رتب ماين كرافت</h3>
+                <form action="/create_mc_roles" method="POST">
+                    <input type="text" name="guild_id" placeholder="ID السيرفر" required>
+                    <button type="submit" class="btn" style="background: #f1c40f; color: black;">إنشاء 20 رتبة</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <h3>📢 برودكاست</h3>
+                <form action="/broadcast" method="POST">
+                    <input type="text" name="guild_id" placeholder="ID السيرفر" required>
+                    <textarea name="msg" placeholder="الرسالة الجماعية"></textarea>
+                    <button type="submit" class="btn btn-red">إرسال للجميع</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
