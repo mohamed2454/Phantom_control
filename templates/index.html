@@ -307,9 +307,55 @@
     </div>
 
     <!-- كود الجافا سكربت للربط الديناميكي الفوري -->
-    <script>
-    document.getElementById('guild_select').addEventListener('change', function() {
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+
+    const guildSelect = document.getElementById('guild_select');
+    const channelSelect = document.getElementById('channel_select');
+    const logChannelSelect = document.getElementById('log_channel_select');
+    const categorySelect = document.getElementById('category_select');
+    const rolesSelect = document.getElementById('roles_select');
+
+    guildSelect.addEventListener('change', function () {
         const guildId = this.value;
-        const channelSelect = document.getElementById('channel_select');
-        const logChannelSelect = document.getElementById('log_channel_select');
-        const categorySelect = document.getElementById('
+
+        if (!guildId) {
+            channelSelect.innerHTML = `<option value="">-- اختر السيرفر أولاً --</option>`;
+            logChannelSelect.innerHTML = `<option value="">-- اختر السيرفر أولاً --</option>`;
+            categorySelect.innerHTML = `<option value="">-- اختر السيرفر أولاً --</option>`;
+            rolesSelect.innerHTML = `<option value="">-- اختر السيرفر أولاً --</option>`;
+            return;
+        }
+
+        fetch(`/get_guild_data?guild_id=${guildId}`)
+            .then(res => res.json())
+            .then(data => {
+
+                channelSelect.innerHTML = "";
+                logChannelSelect.innerHTML = "";
+                categorySelect.innerHTML = "";
+
+                data.channels.forEach(ch => {
+                    channelSelect.add(new Option(ch.name, ch.id));
+                    logChannelSelect.add(new Option(ch.name, ch.id));
+                    categorySelect.add(new Option(ch.name, ch.id));
+                });
+
+                rolesSelect.innerHTML = "";
+                data.roles.forEach(role => {
+                    rolesSelect.add(new Option(role.name, role.id));
+                });
+
+            })
+            .catch(err => console.error(err));
+    });
+
+    // تشغيل تلقائي عند فتح الصفحة
+    window.addEventListener("load", () => {
+        if (guildSelect.value) {
+            guildSelect.dispatchEvent(new Event("change"));
+        }
+    });
+
+});
+</script>
