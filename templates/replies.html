@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>الردود التلقائية</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e1e2e 0%, #2d2d44 100%);
+            color: #fff;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        header h1 {
+            font-size: 2em;
+            background: linear-gradient(135deg, #00d4ff, #7c3aed);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+        }
+        .back-btn {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #7c3aed;
+            color: #fff;
+            text-decoration: none;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+        }
+        .back-btn:hover {
+            background: #6d28d9;
+        }
+        .reply-list {
+            display: grid;
+            gap: 15px;
+        }
+        .reply-item {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+        }
+        .reply-item h3 {
+            color: #00d4ff;
+            margin-bottom: 10px;
+            word-break: break-all;
+        }
+        .reply-item p {
+            color: #b0b0b0;
+            margin: 10px 0;
+            word-break: break-word;
+        }
+        .reply-item .label {
+            color: #7c3aed;
+            font-weight: 600;
+            font-size: 0.9em;
+            text-transform: uppercase;
+        }
+        .empty {
+            text-align: center;
+            padding: 40px;
+            color: #b0b0b0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📋 الردود التلقائية</h1>
+            <a href="/" class="back-btn">← رجوع</a>
+        </header>
+
+        {% if replies %}
+        <div class="reply-list">
+            {% for reply in replies %}
+            <div class="reply-item">
+                <h3>🔑 {{ reply[1] }}</h3>
+                <p><span class="label">الرد:</span></p>
+                <p>{{ reply[2] }}</p>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty">
+            <p>لا توجد ردود تلقائية حالياً</p>
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>
