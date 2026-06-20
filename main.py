@@ -626,7 +626,7 @@ def broadcast():
                 for m in guild.members:
                     if not m.bot:
                         try:
-                            # تخصيص منشن العضو باستخدام معرّف العضو الخام لضمان منشن حقيقي مستقر في الخاص والخوادم 
+                            # استخدام طريقة الأقواس الدائرية لدمج واستبدال الكلمات لتفادي أخطاء خوادم Railway والرموز التالفة
                             user_mention = f"<@{m.id}>"
                             personalized_msg = (
                                 msg.replace("{mention}", user_mention)
