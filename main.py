@@ -409,3 +409,98 @@ def list_replies():
 @require_admin
 def broadcast():
     try:
+        gid = request.form.get('guild_id')
+        msg = sanitize_input(request.form.get('msg', ''))
+        
+        if not gid or not msg:
+            return "<h1>❌ السيرفر والرسالة مطلوبان!</h1><a href='/'>رجوع</a>"
+        
+        async def run_bdc():
+            try:
+                guild = bot.get_guild(int(gid))
+                if not guild:
+                    log_warning("BROADCAST", f"السيرفر {gid} لم يُعثر عليه")
+                    return
+                
+                count = 0
+                for m in guild.members:
+                    if not m.bot:
+                        try:
+                            await m.send(msg)
+                            count += 1
+                        except:
+                            pass
+                
+                log_action_db("BROADCAST", "unknown", f"بث إلى {count} عضو")
+            except Exception as e:
+                log_error("BROADCAST", str(e))
+        
+        asyncio.run_coroutine_threadsafe(run_bdc(), bot.loop)
+        return "<h1>✅ جاري إرسال البرودكاست...</h1><a href='/'>رجوع</a>"
+    except Exception as e:
+        log_error("BROADCAST", str(e))
+        return f"<h1>❌ خطأ: {e}</h1><a href='/'>رجوع</a>"
+
+@app.route('/create_mc_roles', methods=['POST'])
+@require_admin
+def mc_roles():
+    try:
+        gid = request.form.get('guild_id')
+        if not gid:
+            return "<h1>❌ السيرفر مطلوب!</h1><a href='/'>رجوع</a>"
+        
+        async def make():
+            try:
+                g = bot.get_guild(int(gid))
+                if not g:
+                    log_warning("MC_ROLES", f"السيرفر {gid} لم يُعثر عليه")
+                    return
+                
+                created = 0
+                for r in MC_ROLES:
+                    try:
+                        await g.create_role(name=r, color=discord.Color.random())
+                        created += 1
+                    except:
+                        pass
+                
+                log_action_db("MC_ROLES", "unknown", f"تم إنشاء {created} رتب Minecraft")
+            except Exception as e:
+                log_error("MC_ROLES", str(e))
+        
+        asyncio.run_coroutine_threadsafe(make(), bot.loop)
+        return "<h1>✅ جاري إنشاء الرتب...</h1><a href='/'>رجوع</a>"
+    except Exception as e:
+        log_error("MC_ROLES", str(e))
+        return f"<h1>❌ خطأ: {e}</h1><a href='/'>رجوع</a>"
+
+@app.errorhandler(404)
+def not_found(e):
+    return "<h1>❌ الصفحة غير موجودة</h1><a href='/'>الرئيسية</a>", 404
+
+@app.errorhandler(500)
+def server_error(e):
+    log_error("SERVER_ERROR", str(e))
+    return "<h1>❌ خطأ في السيرفر</h1><a href='/'>الرئيسية</a>", 500
+
+def run_web():
+    log_action("FLASK", f"بدء خادم الويب على {FLASK_HOST}:{FLASK_PORT}")
+    app.run(host=FLASK_HOST, port=FLASK_PORT, debug=False, use_reloader=False)
+
+if __name__ == "__main__":
+    log_action("APP_START", "بدء تطبيق Phantom Bot")
+    init_db()
+    
+    threading.Thread(target=run_web, daemon=True).start()
+    log_action("WEB_SERVER", "خادم الويب بدأ")
+    
+    while True:
+        try:
+            if TOKEN:
+                bot.run(TOKEN)
+            else:
+                log_error("TOKEN", "لم يتم العثور على DISCORD_TOKEN في .env")
+                break
+        except Exception as e:
+            log_error("BOT_CRASH", str(e))
+            time.sleep(60)
