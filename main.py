@@ -78,6 +78,21 @@ class TicketLaunch(discord.ui.View):
             log_error("TICKET_OPEN", str(e))
             await i.response.send_message("❌ حدث خطأ في فتح التذكرة!", ephemeral=True)
 
+# دالة مساعدة مطورة ومضمونة لجلب القناة وإرسال التذاكر مع تسجيل أي خطأ في السجلات بالتفصيل
+async def send_ticket_launcher(channel_id):
+    try:
+        # استخدام fetch_channel بدلاً من get_channel لضمان جلب القناة مباشرة من ديسكورد وتجنب الـ Cache الفارغ
+        channel = await bot.fetch_channel(channel_id)
+        if channel:
+            await channel.send("🎫 فتح تذكرة", view=TicketLaunch())
+            log_action("TICKET_LAUNCH", f"تم إرسال رسالة التذاكر بنجاح في القناة {channel_id}")
+        else:
+            log_error("TICKET_LAUNCH", f"لم يتم العثور على القناة {channel_id}")
+    except discord.Forbidden:
+        log_error("TICKET_LAUNCH", f"فشل الإرسال: البوت يفتقد لصلاحية إرسال الرسائل أو رؤية القناة {channel_id}")
+    except Exception as e:
+        log_error("TICKET_LAUNCH", f"حدث خطأ أثناء إرسال رسالة التذاكر: {e}")
+
 # --- فعاليات البوت ---
 @bot.event
 async def on_ready():
@@ -280,12 +295,11 @@ def update():
         conn.commit()
         conn.close()
         
-        channel = bot.get_channel(int(f['channel_id']))
-        if channel:
-            asyncio.run_coroutine_threadsafe(
-                channel.send("🎫 فتح تذكرة", view=TicketLaunch()), 
-                bot.loop
-            )
+        # استدعاء الدالة المساعدة بشكل آمن على خيط البوت لتفادي خطأ Event Loop
+        asyncio.run_coroutine_threadsafe(
+            send_ticket_launcher(int(f['channel_id'])), 
+            bot.loop
+        )
         
         log_action_db("SETTINGS_UPDATE", "unknown", f"تحديث إعدادات السيرفر {f['guild_id']}")
         return "<h1>✅ تم الحفظ!</h1><a href='/'>رجوع</a>"
@@ -343,7 +357,7 @@ def broadcast():
         
         async def run_bdc():
             try:
-                guild = bot.get_guild(int(gid))
+                guild = guild = bot.get_guild(int(gid))
                 if not guild:
                     log_warning("BROADCAST", f"السيرفر {gid} لم يُعثر عليه")
                     return
