@@ -1,158 +1,338 @@
 import discord
 from discord.ext import commands
-from flask import Flask, render_template, request
-import threading, asyncio, sqlite3, io, os, math, time, socket, aiohttp
+from flask import Flask, render_template, request, jsonify
+import threading, asyncio, sqlite3, os, math, time, socket, aiohttp
+from dotenv import load_dotenv
+from utils import sanitize_input, is_valid_channel_id, is_valid_guild_id, create_xp_embed, get_user_xp
+from database import init_db, backup_db, log_action_db, add_warning, get_warnings, add_ban, is_user_banned
+from permissions import require_admin, check_guild_permissions, validate_input
+from logger_config import log_action, log_error, log_warning
 
-# --- إعدادات التوكن ---
+# تحميل متغيرات البيئة
+load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
-if TOKEN: TOKEN = TOKEN.strip().replace('"', '').replace("'", "")
+FLASK_HOST = os.getenv('FLASK_HOST', '0.0.0.0')
+FLASK_PORT = int(os.getenv('FLASK_PORT', 7860))
 
 MC_ROLES = ["Steve", "Alex", "Villager", "Zombie", "Creeper", "Enderman", "Skeleton", "Spider", "Piglin", "Ghast", 
             "Blaze", "Iron Golem", "Wither", "Ender Dragon", "Warden", "Herobrine", "Axolotl", "Bee", "Fox", "Wolf"]
 
+DB_PATH = 'phantom_pro.db'
+
 # --- البوت المطور ---
 class PhantomBot(commands.Bot):
     async def setup_hook(self):
-        self.http.connector = aiohttp.TCPConnector(family=socket.AF_INET)
-        self.add_view(TicketLaunch())
-        self.add_view(TicketActions())
+        try:
+            self.http.connector = aiohttp.TCPConnector(family=socket.AF_INET)
+            self.add_view(TicketLaunch())
+            self.add_view(TicketActions())
+            log_action("BOT_SETUP", "تم إعداد البوت بنجاح")
+        except Exception as e:
+            log_error("BOT_SETUP", str(e))
 
 intents = discord.Intents.default()
 intents.members = True
 intents.message_content = True
+intents.guilds = True
 bot = PhantomBot(command_prefix="!", intents=intents)
-
-# --- قاعدة البيانات ---
-DB_PATH = 'phantom_pro.db'
-def init_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute('CREATE TABLE IF NOT EXISTS config (guild_id TEXT PRIMARY KEY, admin_roles TEXT, channel_id TEXT, log_channel TEXT, category_id TEXT)')
-    conn.execute('CREATE TABLE IF NOT EXISTS auto_replies (keyword TEXT, response TEXT)')
-    conn.execute('CREATE TABLE IF NOT EXISTS levels (user_id TEXT, xp INTEGER DEFAULT 0)')
-    conn.commit() ; conn.close()
-init_db()
 
 # --- أنظمة التذاكر ---
 class TicketActions(discord.ui.View):
-    def __init__(self): super().__init__(timeout=None)
+    def __init__(self): 
+        super().__init__(timeout=None)
+    
     @discord.ui.button(label="استلام ✋", style=discord.ButtonStyle.primary, custom_id="c_final")
-    async def claim(self, i, b): 
-        await i.response.send_message(f"✅ استلم {i.user.mention} التذكرة.")
+    async def claim(self, i, b):
+        try:
+            await i.response.send_message(f"✅ استلم {i.user.mention} التذكرة.")
+            log_action_db("TICKET_CLAIM", str(i.user.id), f"تم استلام تذكرة في {i.channel.name}")
+        except Exception as e:
+            log_error("TICKET_CLAIM", str(e))
+    
     @discord.ui.button(label="إغلاق 🔒", style=discord.ButtonStyle.danger, custom_id="l_final")
-    async def close_ticket(self, i, b): 
+    async def close_ticket(self, i, b):
         try:
             await i.response.defer()
+            log_action_db("TICKET_CLOSE", str(i.user.id), f"تم إغلاق تذكرة: {i.channel.name}")
             await i.channel.delete()
         except Exception as e:
-            print(f"خطأ في إغلاق التذكرة: {e}")
+            log_error("TICKET_CLOSE", str(e))
+            await i.followup.send("❌ حدث خطأ في إغلاق التذكرة", ephemeral=True)
 
 class TicketLaunch(discord.ui.View):
-    def __init__(self): super().__init__(timeout=None)
+    def __init__(self): 
+        super().__init__(timeout=None)
+    
     @discord.ui.button(label="فتح تذكرة 🎫", style=discord.ButtonStyle.success, custom_id="o_final")
     async def open(self, i, b):
         try:
             await i.response.defer(ephemeral=True)
             ch = await i.guild.create_text_channel(f"ticket-{i.user.name}")
-            await i.followup.send(f"تم فتح تذكرتك: {ch.mention}", ephemeral=True)
-            await ch.send(f"أهلاً {i.user.mention}", view=TicketActions())
+            await i.followup.send(f"✅ تم فتح تذكرتك: {ch.mention}", ephemeral=True)
+            await ch.send(f"أهلاً {i.user.mention}\nاختر الإجراء المطلوب:", view=TicketActions())
+            log_action_db("TICKET_OPEN", str(i.user.id), f"فتح تذكرة جديدة: {ch.name}")
         except Exception as e:
-            print(f"خطأ في فتح التذكرة: {e}")
-            await i.response.send_message("حدث خطأ في فتح التذكرة!", ephemeral=True)
+            log_error("TICKET_OPEN", str(e))
+            await i.response.send_message("❌ حدث خطأ في فتح التذكرة!", ephemeral=True)
 
 # --- فعاليات البوت ---
 @bot.event
+async def on_ready():
+    log_action("BOT_READY", f"البوت {bot.user} متصل وجاهز للعمل")
+    print(f"--- ✅ {bot.user} متصل ---")
+    
+    # نسخ احتياطي يومي
+    backup_db()
+
+@bot.event
 async def on_message(message):
-    if message.author.bot: return
+    if message.author.bot: 
+        return
+    
     try:
+        # التحقق من الحظر
+        if is_user_banned(str(message.author.id), str(message.guild.id)):
+            return
+        
         conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
         # الردود التلقائية
-        r = conn.execute("SELECT response FROM auto_replies WHERE keyword=?", (message.content,)).fetchone()
-        if r: await message.channel.send(r[0])
+        cursor.execute("SELECT response FROM auto_replies WHERE keyword=?", (message.content,))
+        r = cursor.fetchone()
+        if r: 
+            await message.channel.send(r[0])
+        
         # نظام الـ XP
-        conn.execute("INSERT OR IGNORE INTO levels (user_id, xp) VALUES (?, 0)", (str(message.author.id),))
-        conn.execute("UPDATE levels SET xp = xp + 1 WHERE user_id = ?", (str(message.author.id),))
-        conn.commit(); conn.close()
+        cursor.execute("INSERT OR IGNORE INTO levels (user_id, xp, level) VALUES (?, 0, 1)", (str(message.author.id),))
+        cursor.execute("UPDATE levels SET xp = xp + 1 WHERE user_id = ?", (str(message.author.id),))
+        conn.commit()
+        
+        # حفظ السجل
+        log_action_db("MESSAGE", str(message.author.id), f"رسالة في {message.guild.name}")
+        
+        conn.close()
     except Exception as e:
-        print(f"خطأ في معالجة الرسالة: {e}")
+        log_error("ON_MESSAGE", str(e))
+    
     await bot.process_commands(message)
+
+# --- أوامر البوت ---
+@bot.command(name="xp")
+async def check_xp(ctx):
+    """فحص XP المستخدم"""
+    try:
+        xp, level = get_user_xp(ctx.author.id)
+        embed = create_xp_embed(ctx.author, xp, level)
+        await ctx.send(embed=embed)
+    except Exception as e:
+        log_error("XP_COMMAND", str(e))
+        await ctx.send("❌ حدث خطأ في عرض الإحصائيات")
+
+@bot.command(name="warn")
+@commands.has_permissions(administrator=True)
+async def warn_user(ctx, user: discord.User, *, reason="بدون سبب"):
+    """إعطاء تحذير للمستخدم"""
+    try:
+        count = add_warning(str(user.id), str(ctx.guild.id), reason, str(ctx.author.id))
+        embed = discord.Embed(
+            title="⚠️ تحذير جديد",
+            description=f"تم تحذير {user.mention}\n**السبب:** {reason}\n**عدد التحذيرات:** {count}",
+            color=discord.Color.orange()
+        )
+        await ctx.send(embed=embed)
+        log_action_db("WARNING", str(user.id), f"تحذير من {ctx.author.name}: {reason}")
+    except Exception as e:
+        log_error("WARN_COMMAND", str(e))
+        await ctx.send("❌ حدث خطأ")
+
+@bot.command(name="ban")
+@commands.has_permissions(administrator=True)
+async def ban_user(ctx, user: discord.User, *, reason="بدون سبب"):
+    """حظر المستخدم"""
+    try:
+        if add_ban(str(user.id), str(ctx.guild.id), reason, str(ctx.author.id)):
+            embed = discord.Embed(
+                title="🔨 حظر",
+                description=f"تم حظر {user.mention}\n**السبب:** {reason}",
+                color=discord.Color.red()
+            )
+            await ctx.send(embed=embed)
+            await ctx.guild.ban(user, reason=reason)
+            log_action_db("BAN", str(user.id), f"حظر من {ctx.author.name}: {reason}")
+    except Exception as e:
+        log_error("BAN_COMMAND", str(e))
+        await ctx.send("❌ حدث خطأ في الحظر")
 
 # --- لوحة التحكم (Flask) ---
 app = Flask(__name__)
+app.config['JSON_AS_ASCII'] = False
+
 @app.route('/')
 def home():
-    status = "متصل ✅" if bot.is_ready() else "جاري فك الحظر... ⏳"
-    g = bot.guilds[0] if bot.guilds else None
-    ping = round(bot.latency * 1000) if (bot.latency and not math.isnan(bot.latency)) else 0
-    tickets = len([c for c in bot.get_all_channels() if "ticket-" in c.name])
-    return render_template('index.html', status=status, member_count=g.member_count if g else 0, ping=ping, open_tickets=tickets)
+    try:
+        status = "متصل ✅" if bot.is_ready() else "جاري الاتصال... ⏳"
+        g = bot.guilds[0] if bot.guilds else None
+        ping = round(bot.latency * 1000) if (bot.latency and not math.isnan(bot.latency)) else 0
+        tickets = len([c for c in bot.get_all_channels() if "ticket-" in c.name])
+        
+        return render_template('index.html', 
+                             status=status, 
+                             member_count=g.member_count if g else 0, 
+                             ping=ping, 
+                             open_tickets=tickets,
+                             bot_name=bot.user.name if bot.user else "البوت")
+    except Exception as e:
+        log_error("HOME_ROUTE", str(e))
+        return "خطأ في التحميل", 500
+
+@app.route('/api/stats')
+def get_stats():
+    """الحصول على إحصائيات البوت"""
+    try:
+        status = "متصل ✅" if bot.is_ready() else "معطل ❌"
+        g = bot.guilds[0] if bot.guilds else None
+        ping = round(bot.latency * 1000) if (bot.latency and not math.isnan(bot.latency)) else 0
+        
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM auto_replies")
+        replies = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM levels")
+        users = cursor.fetchone()[0]
+        conn.close()
+        
+        return jsonify({
+            'status': status,
+            'guilds': len(bot.guilds),
+            'members': g.member_count if g else 0,
+            'ping': ping,
+            'auto_replies': replies,
+            'total_users': users
+        })
+    except Exception as e:
+        log_error("STATS_API", str(e))
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/update_settings', methods=['POST'])
+@require_admin
 def update():
     try:
         f = request.form
+        valid, msg = validate_input(f, ['guild_id', 'channel_id'])
+        if not valid:
+            return f"<h1>❌ خطأ: {msg}</h1><a href='/'>رجوع</a>"
+        
         conn = sqlite3.connect(DB_PATH)
-        conn.execute("INSERT OR REPLACE INTO config VALUES (?, ?, ?, ?, ?)", (f['guild_id'], f['admin_roles'], f['channel_id'], f['log_channel'], f['category_id']))
-        conn.commit(); conn.close()
+        cursor = conn.cursor()
+        cursor.execute("INSERT OR REPLACE INTO config VALUES (?, ?, ?, ?, ?)", 
+                      (f['guild_id'], f.get('admin_roles', ''), f['channel_id'], 
+                       f.get('log_channel', ''), f.get('category_id', '')))
+        conn.commit()
+        conn.close()
         
         channel = bot.get_channel(int(f['channel_id']))
         if channel:
-            asyncio.run_coroutine_threadsafe(channel.send("فتح تذكرة", view=TicketLaunch()), bot.loop)
-        else:
-            print(f"⚠️ قناة برقم {f['channel_id']} لم تُعثر عليها")
-        return "<h1>تم الحفظ!</h1><a href='/'>رجوع</a>"
+            asyncio.run_coroutine_threadsafe(
+                channel.send("🎫 فتح تذكرة", view=TicketLaunch()), 
+                bot.loop
+            )
+        
+        log_action_db("SETTINGS_UPDATE", "unknown", f"تحديث إعدادات السيرفر {f['guild_id']}")
+        return "<h1>✅ تم الحفظ!</h1><a href='/'>رجوع</a>"
     except Exception as e:
-        print(f"خطأ في تحديث الإعدادات: {e}")
-        return f"<h1>خطأ: {e}</h1><a href='/'>رجوع</a>"
+        log_error("UPDATE_SETTINGS", str(e))
+        return f"<h1>❌ خطأ: {e}</h1><a href='/'>رجوع</a>"
 
 @app.route('/add_auto_reply', methods=['POST'])
+@require_admin
 def add_reply():
     try:
+        keyword = sanitize_input(request.form.get('keyword', ''))
+        response = sanitize_input(request.form.get('response', ''))
+        
+        if not keyword or not response:
+            return "<h1>❌ الكلمة المفتاحية والرد مطلوبان!</h1><a href='/'>رجوع</a>"
+        
         conn = sqlite3.connect(DB_PATH)
-        conn.execute("INSERT INTO auto_replies VALUES (?, ?)", (request.form['keyword'], request.form['response']))
-        conn.commit(); conn.close()
-        return "<h1>تمت إضافة الرد!</h1><a href='/'>رجوع</a>"
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO auto_replies (keyword, response, created_at) VALUES (?, ?, CURRENT_TIMESTAMP)", 
+                      (keyword, response))
+        conn.commit()
+        conn.close()
+        
+        log_action_db("AUTO_REPLY_ADD", "unknown", f"رد تلقائي: {keyword}")
+        return "<h1>✅ تمت إضافة الرد!</h1><a href='/'>رجوع</a>"
     except Exception as e:
-        print(f"خطأ في إضافة الرد: {e}")
-        return f"<h1>خطأ: {e}</h1><a href='/'>رجوع</a>"
+        log_error("ADD_REPLY", str(e))
+        return f"<h1>❌ خطأ: {e}</h1><a href='/'>رجوع</a>"
+
+@app.route('/list_replies')
+def list_replies():
+    """عرض جميع الردود التلقائية"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, keyword, response FROM auto_replies")
+        replies = cursor.fetchall()
+        conn.close()
+        
+        return render_template('replies.html', replies=replies)
+    except Exception as e:
+        log_error("LIST_REPLIES", str(e))
+        return "خطأ في التحميل", 500
 
 @app.route('/broadcast', methods=['POST'])
+@require_admin
 def broadcast():
     try:
-        gid, msg = request.form['guild_id'], request.form['msg']
+        gid = request.form.get('guild_id')
+        msg = sanitize_input(request.form.get('msg', ''))
+        
+        if not gid or not msg:
+            return "<h1>❌ السيرفر والرسالة مطلوبان!</h1><a href='/'>رجوع</a>"
         
         async def run_bdc():
             try:
                 guild = bot.get_guild(int(gid))
                 if not guild:
-                    print(f"⚠️ السيرفر برقم {gid} لم يُعثر عليه")
+                    log_warning("BROADCAST", f"السيرفر {gid} لم يُعثر عليه")
                     return
+                
+                count = 0
                 for m in guild.members:
                     if not m.bot:
-                        try: 
+                        try:
                             await m.send(msg)
-                        except: 
-                            continue
-                print(f"✅ تم إرسال البرودكاست إلى {len(guild.members)} عضو")
+                            count += 1
+                        except:
+                            pass
+                
+                log_action_db("BROADCAST", "unknown", f"بث إلى {count} عضو")
             except Exception as e:
-                print(f"خطأ في البرودكاست: {e}")
+                log_error("BROADCAST", str(e))
         
         asyncio.run_coroutine_threadsafe(run_bdc(), bot.loop)
-        return "<h1>جاري إرسال البرودكاست...</h1><a href='/'>رجوع</a>"
+        return "<h1>✅ جاري إرسال البرودكاست...</h1><a href='/'>رجوع</a>"
     except Exception as e:
-        print(f"خطأ في البرودكاست: {e}")
-        return f"<h1>خطأ: {e}</h1><a href='/'>رجوع</a>"
+        log_error("BROADCAST", str(e))
+        return f"<h1>❌ خطأ: {e}</h1><a href='/'>رجوع</a>"
 
 @app.route('/create_mc_roles', methods=['POST'])
+@require_admin
 def mc_roles():
     try:
-        gid = request.form['guild_id']
+        gid = request.form.get('guild_id')
+        if not gid:
+            return "<h1>❌ السيرفر مطلوب!</h1><a href='/'>رجوع</a>"
         
         async def make():
             try:
                 g = bot.get_guild(int(gid))
                 if not g:
-                    print(f"⚠️ السيرفر برقم {gid} لم يُعثر عليه")
+                    log_warning("MC_ROLES", f"السيرفر {gid} لم يُعثر عليه")
                     return
+                
                 created = 0
                 for r in MC_ROLES:
                     try:
@@ -160,28 +340,44 @@ def mc_roles():
                         created += 1
                     except:
                         pass
-                print(f"✅ تم إنشاء {created} رتب من أصل {len(MC_ROLES)}")
+                
+                log_action_db("MC_ROLES", "unknown", f"تم إنشاء {created} رتب Minecraft")
             except Exception as e:
-                print(f"خطأ في إنشاء الرتب: {e}")
+                log_error("MC_ROLES", str(e))
         
         asyncio.run_coroutine_threadsafe(make(), bot.loop)
-        return "<h1>جاري إنشاء الرتب...</h1><a href='/'>رجوع</a>"
+        return "<h1>✅ جاري إنشاء الرتب...</h1><a href='/'>رجوع</a>"
     except Exception as e:
-        print(f"خطأ في إنشاء الرتب: {e}")
-        return f"<h1>خطأ: {e}</h1><a href='/'>رجوع</a>"
+        log_error("MC_ROLES", str(e))
+        return f"<h1>❌ خطأ: {e}</h1><a href='/'>رجوع</a>"
 
-@bot.event
-async def on_ready(): 
-    print(f"--- ✅ {bot.user} متصل ---")
+@app.errorhandler(404)
+def not_found(e):
+    return "<h1>❌ الصفحة غير موجودة</h1><a href='/'>الرئيسية</a>", 404
 
-def run_web(): 
-    app.run(host='0.0.0.0', port=7860, debug=False)
+@app.errorhandler(500)
+def server_error(e):
+    log_error("SERVER_ERROR", str(e))
+    return "<h1>❌ خطأ في السيرفر</h1><a href='/'>الرئيسية</a>", 500
+
+def run_web():
+    log_action("FLASK", f"بدء خادم الويب على {FLASK_HOST}:{FLASK_PORT}")
+    app.run(host=FLASK_HOST, port=FLASK_PORT, debug=False, use_reloader=False)
 
 if __name__ == "__main__":
+    log_action("APP_START", "بدء تطبيق Phantom Bot")
+    init_db()
+    
     threading.Thread(target=run_web, daemon=True).start()
+    log_action("WEB_SERVER", "خادم الويب بدأ")
+    
     while True:
-        try: 
-            bot.run(TOKEN)
+        try:
+            if TOKEN:
+                bot.run(TOKEN)
+            else:
+                log_error("TOKEN", "لم يتم العثور على DISCORD_TOKEN في .env")
+                break
         except Exception as e:
-            print(f"خطأ في البوت: {e}")
+            log_error("BOT_CRASH", str(e))
             time.sleep(60)
