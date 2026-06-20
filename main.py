@@ -39,6 +39,29 @@ intents.message_content = True
 intents.guilds = True
 bot = PhantomBot(command_prefix="!", intents=intents)
 
+# دالة مساعدة للتحقق مما إذا كان العضو إدارياً (يمتلك صلاحية إدارية أو رتبة محددة من لوحة التحكم للتذاكر)
+def is_ticket_admin(member, guild_id):
+    # إذا كان العضو مالك السيرفر أو يمتلك صلاحية المسؤول العام (Administrator)
+    if member == member.guild.owner or member.guild_permissions.administrator:
+        return True
+    
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT admin_roles FROM config WHERE guild_id=?", (str(guild_id),))
+        row = cursor.fetchone()
+        conn.close()
+        
+        if row and row[0]:
+            admin_roles_list = row[0].split(",")
+            for role in member.roles:
+                if str(role.id) in admin_roles_list:
+                    return True
+    except Exception as e:
+        log_error("CHECK_TICKET_ADMIN", str(e))
+    
+    return False
+
 # --- أنظمة التذاكر ---
 class TicketActions(discord.ui.View):
     def __init__(self): 
@@ -47,6 +70,11 @@ class TicketActions(discord.ui.View):
     @discord.ui.button(label="استلام ✋", style=discord.ButtonStyle.primary, custom_id="c_final")
     async def claim(self, i, b):
         try:
+            # التحقق من الصلاحية الإدارية
+            if not is_ticket_admin(i.user, i.guild.id):
+                await i.response.send_message("❌ هذا الإجراء مخصص للإداريين فقط!", ephemeral=True)
+                return
+
             await i.response.send_message(f"✅ استلم {i.user.mention} التذكرة.")
             log_action_db("TICKET_CLAIM", str(i.user.id), f"تم استلام تذكرة في {i.channel.name}")
         except Exception as e:
@@ -55,6 +83,11 @@ class TicketActions(discord.ui.View):
     @discord.ui.button(label="إغلاق 🔒", style=discord.ButtonStyle.danger, custom_id="l_final")
     async def close_ticket(self, i, b):
         try:
+            # التحقق من الصلاحية الإدارية
+            if not is_ticket_admin(i.user, i.guild.id):
+                await i.response.send_message("❌ هذا الإجراء مخصص للإداريين فقط!", ephemeral=True)
+                return
+
             await i.response.defer()
             
             # 1. جمع رسائل القناة لإنشاء سجل المحادثة (Transcript)
@@ -488,7 +521,15 @@ def broadcast():
                 for m in guild.members:
                     if not m.bot:
                         try:
-                            await m.send(msg)
+                            # تخصيص منشن العضو باستخدام معرّف العضو الخام لضمان منشن حقيقي مستقر في الخاص والخوادم 
+                            user_mention = f"<@{m.id}>"
+                            personalized_msg = (
+                                msg.replace("{mention}", user_mention)
+                                   .replace("{منشن}", user_mention)
+                                   .replace("{name}", m.name)
+                                   .replace("{اسم}", m.name)
+                            )
+                            await m.send(personalized_msg)
                             count += 1
                         except:
                             pass
