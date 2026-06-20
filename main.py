@@ -12,7 +12,7 @@ from logger_config import log_action, log_error, log_warning
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 FLASK_HOST = os.getenv('FLASK_HOST', '0.0.0.0')
-FLASK_PORT = int(os.getenv('FLASK_PORT', 7860))
+FLASK_PORT = int(os.getenv('FLASK_PORT', 8080))
 
 MC_ROLES = ["Steve", "Alex", "Villager", "Zombie", "Creeper", "Enderman", "Skeleton", "Spider", "Piglin", "Ghast", 
             "Blaze", "Iron Golem", "Wither", "Ender Dragon", "Warden", "Herobrine", "Axolotl", "Bee", "Fox", "Wolf"]
