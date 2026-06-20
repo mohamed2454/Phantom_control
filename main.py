@@ -78,10 +78,10 @@ class TicketLaunch(discord.ui.View):
             log_error("TICKET_OPEN", str(e))
             await i.response.send_message("❌ حدث خطأ في فتح التذكرة!", ephemeral=True)
 
-# دالة مساعدة مطورة ومضمونة لجلب القناة وإرسال التذاكر مع تسجيل أي خطأ في السجلات بالتفصيل
+# دالة مساعدة لتجهيز وإرسال رسالة التذاكر بالكامل داخل خيط البوت (Thread) لتفادي أخطاء الـ Event Loop
 async def send_ticket_launcher(channel_id):
     try:
-        # استخدام fetch_channel بدلاً من get_channel لضمان جلب القناة مباشرة من ديسكورد وتجنب الـ Cache الفارغ
+        # استخدام fetch_channel لضمان جلب القناة مباشرة من ديسكورد وتجنب الـ Cache الفارغ
         channel = await bot.fetch_channel(channel_id)
         if channel:
             await channel.send("🎫 فتح تذكرة", view=TicketLaunch())
@@ -111,7 +111,50 @@ async def on_message(message):
         # التحقق من الحظر
         if is_user_banned(str(message.author.id), str(message.guild.id)):
             return
-        
+
+        # --- نظام إضافة وإزالة رتب الماين كرافت عبر شات الديسكورد (+ / -) ---
+        content = message.content.strip()
+        if content.startswith('+') or content.startswith('-'):
+            is_add = content.startswith('+')
+            raw_text = content[1:].strip()
+            
+            if message.mentions:
+                target_member = message.mentions[0]
+                # تنظيف النص لاستخراج اسم الرتبة فقط بدون المنشن
+                role_query = raw_text.replace(target_member.mention, "").replace(f"<@!{target_member.id}>", "").strip()
+                
+                # البحث عن الرتبة المطابقة في قائمة MC_ROLES
+                matched_role_name = None
+                for r_name in MC_ROLES:
+                    if r_name.lower() == role_query.lower() or r_name.lower() in role_query.lower():
+                        matched_role_name = r_name
+                        break
+                
+                if matched_role_name:
+                    # التحقق من صلاحية العضو المرسل للأمر
+                    if not message.author.guild_permissions.manage_roles:
+                        await message.channel.send("❌ لا تمتلك صلاحية `إدارة الرتب (Manage Roles)` لاستخدام هذا الأمر.")
+                        return
+                    
+                    # البحث عن الرتبة داخل السيرفر
+                    guild_role = discord.utils.get(message.guild.roles, name=matched_role_name)
+                    if not guild_role:
+                        await message.channel.send(f"❌ لم يتم العثور على رتبة `{matched_role_name}` في السيرفر. قم بإنشائها أولاً من لوحة التحكم.")
+                        return
+                    
+                    try:
+                        if is_add:
+                            await target_member.add_roles(guild_role)
+                            await message.channel.send(f"✅ تم منح رتبة `{matched_role_name}` للعضو {target_member.mention}")
+                        else:
+                            await target_member.remove_roles(guild_role)
+                            await message.channel.send(f"✅ تم إزالة رتبة `{matched_role_name}` من العضو {target_member.mention}")
+                    except discord.Forbidden:
+                        await message.channel.send("❌ البوت لا يملك صلاحية كافية لتعديل هذه الرتبة. تأكد من سحب رتبة البوت لتكون **أعلى** من رتب Minecraft في قائمة رتب السيرفر (Server Settings -> Roles).")
+                    except Exception as e:
+                        log_error("ROLE_CHANGE", str(e))
+                    return  # إيقاف المعالجة لعدم تداخلها مع الردود التلقائية
+
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         
@@ -357,7 +400,7 @@ def broadcast():
         
         async def run_bdc():
             try:
-                guild = guild = bot.get_guild(int(gid))
+                guild = bot.get_guild(int(gid))
                 if not guild:
                     log_warning("BROADCAST", f"السيرفر {gid} لم يُعثر عليه")
                     return
