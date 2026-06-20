@@ -157,6 +157,42 @@ class TicketActions(discord.ui.View):
             except:
                 pass
 
+# --- نظام قائمة اختيار أسباب فتح التذاكر ---
+class TicketReasonSelect(discord.ui.Select):
+    def __init__(self, reasons):
+        options = []
+        for r_id, r_text in reasons:
+            options.append(discord.SelectOption(label=r_text, value=str(r_id)))
+        super().__init__(placeholder="👉 الرجاء تحديد سبب فتح التذكرة للبدء...", min_values=1, max_values=1, options=options)
+    
+    async def callback(self, i: discord.Interaction):
+        try:
+            await i.response.defer()
+            selected_id = self.values[0]
+            
+            # العثور على اسم السبب المختار
+            selected_text = "غير محدد"
+            for opt in self.options:
+                if opt.value == selected_id:
+                    selected_text = opt.label
+                    break
+            
+            # عرض تفاصيل التذكرة وتفعيل أزرار الإدارة
+            embed = discord.Embed(
+                title="🎫 تفاصيل التذكرة الحالية",
+                description=f"**صاحب التذكرة:** {i.user.mention}\n**السبب المختار:** `{selected_text}`",
+                color=discord.Color.blue()
+            )
+            # إزالة قائمة الاختيار من الرسالة ووضع أزرار الاستلام والإغلاق مكانها
+            await i.edit_original_response(content="✅ تم تحديد سبب فتح التذكرة بنجاح.", embed=embed, view=TicketActions())
+        except Exception as e:
+            log_error("TICKET_REASON_SELECT_CALLBACK", str(e))
+
+class TicketReasonView(discord.ui.View):
+    def __init__(self, reasons):
+        super().__init__(timeout=None)
+        self.add_item(TicketReasonSelect(reasons))
+
 class TicketLaunch(discord.ui.View):
     def __init__(self): 
         super().__init__(timeout=None)
@@ -165,9 +201,28 @@ class TicketLaunch(discord.ui.View):
     async def open(self, i, b):
         try:
             await i.response.defer(ephemeral=True)
+            
+            # جلب الخيارات المخصصة للتذاكر من قاعدة البيانات
+            reasons = []
+            try:
+                conn = sqlite3.connect(DB_PATH)
+                cursor = conn.cursor()
+                cursor.execute("SELECT id, reason FROM ticket_reasons WHERE guild_id=?", (str(i.guild.id),))
+                reasons = cursor.fetchall()
+                conn.close()
+            except Exception as e:
+                log_error("GET_REASONS", str(e))
+
             ch = await i.guild.create_text_channel(f"ticket-{i.user.name}")
             await i.followup.send(f"✅ تم فتح تذكرتك: {ch.mention}", ephemeral=True)
-            await ch.send(f"أهلاً {i.user.mention}\nاختر الإجراء المطلوب:", view=TicketActions())
+            
+            if reasons:
+                # إذا كانت هناك خيارات تم إدخالها من اللوحة، نرسل قائمة الاختيار أولاً
+                await ch.send(f"أهلاً {i.user.mention}\nالرجاء تحديد سبب فتح التذكرة من القائمة أدناه للبدء:", view=TicketReasonView(reasons))
+            else:
+                # إذا لم تكن هناك خيارات، نرسل أزرار الإدارة مباشرة كالسابق
+                await ch.send(f"أهلاً {i.user.mention}\nاختر الإجراء المطلوب:", view=TicketActions())
+                
             log_action_db("TICKET_OPEN", str(i.user.id), f"فتح تذكرة جديدة: {ch.name}")
         except Exception as e:
             log_error("TICKET_OPEN", str(e))
@@ -369,7 +424,7 @@ def home():
         log_error("HOME_ROUTE", str(e))
         return "خطأ في التحميل", 500
 
-# نقطة برمجية جديدة (API) لجلب تفاصيل السيرفر بمجرد اختياره في الواجهة
+# نقطة برمجية لجلب تفاصيل السيرفر بمجرد اختياره في الواجهة (تم تطويرها لتشمل أسباب خيارات التذاكر)
 @app.route('/api/guild_details/<guild_id>')
 def guild_details(guild_id):
     try:
@@ -387,10 +442,20 @@ def guild_details(guild_id):
         # جلب الرتب باستثناء رتبة الجميع @everyone ورتب البوتات التلقائية
         roles = [{'id': str(r.id), 'name': r.name} for r in guild.roles if not r.is_default() and not r.managed]
         
+        # جلب خيارات التذاكر المضافة من لوحة التحكم من قاعدة البيانات
+        reasons = []
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, reason FROM ticket_reasons WHERE guild_id=?", (str(guild_id),))
+        rows = cursor.fetchall()
+        conn.close()
+        reasons = [{'id': r[0], 'reason': r[1]} for r in rows]
+        
         return jsonify({
             'channels': channels,
             'categories': categories,
-            'roles': roles
+            'roles': roles,
+            'reasons': reasons
         })
     except Exception as e:
         log_error("GUILD_DETAILS_API", str(e))
@@ -460,6 +525,46 @@ def update():
         return "<h1>✅ تم الحفظ!</h1><a href='/'>رجوع</a>"
     except Exception as e:
         log_error("UPDATE_SETTINGS", str(e))
+        return f"<h1>❌ خطأ: {e}</h1><a href='/'>رجوع</a>"
+
+# راوت برمجية جديدة لإضافة خيارات/أسباب التذاكر من لوحة التحكم
+@app.route('/add_ticket_reason', methods=['POST'])
+@require_admin
+def add_ticket_reason():
+    try:
+        gid = request.form.get('guild_id')
+        reason = sanitize_input(request.form.get('reason', ''))
+        
+        if not gid or not reason:
+            return "<h1>❌ السيرفر والسبب مطلوبان!</h1><a href='/'>رجوع</a>"
+        
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO ticket_reasons (guild_id, reason) VALUES (?, ?)", (gid, reason))
+        conn.commit()
+        conn.close()
+        
+        log_action_db("TICKET_REASON_ADD", "unknown", f"إضافة سبب تذكرة: {reason} للسيرفر {gid}")
+        return "<h1>✅ تمت إضافة السبب بنجاح!</h1><a href='/'>رجوع</a>"
+    except Exception as e:
+        log_error("ADD_REASON", str(e))
+        return f"<h1>❌ خطأ: {e}</h1><a href='/'>رجوع</a>"
+
+# راوت برمجية جديدة لحذف خيارات/أسباب التذاكر من لوحة التحكم
+@app.route('/delete_ticket_reason/<int:reason_id>', methods=['POST'])
+@require_admin
+def delete_ticket_reason(reason_id):
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM ticket_reasons WHERE id=?", (reason_id,))
+        conn.commit()
+        conn.close()
+        
+        log_action_db("TICKET_REASON_DELETE", "unknown", f"حذف خيار تذكرة رقم {reason_id}")
+        return "<h1>✅ تم حذف خيار التذكرة بنجاح!</h1><a href='/'>رجوع</a>"
+    except Exception as e:
+        log_error("DELETE_REASON", str(e))
         return f"<h1>❌ خطأ: {e}</h1><a href='/'>رجوع</a>"
 
 @app.route('/add_auto_reply', methods=['POST'])
@@ -594,6 +699,18 @@ if __name__ == "__main__":
     log_action("APP_START", "بدء تطبيق Phantom Bot")
     init_db()
     
+    # التأكد من تهيئة الجدول الجديد لتخزين خيارات أسباب التذاكر تلقائياً لحماية قاعدة البيانات من الانهيار
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute('''CREATE TABLE IF NOT EXISTS ticket_reasons 
+                         (id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id TEXT, reason TEXT)''')
+        conn.commit()
+        conn.close()
+        log_action("DATABASE", "تم التحقق من تهيئة جدول ticket_reasons بنجاح")
+    except Exception as e:
+        log_error("DB_TICKET_REASONS_INIT", str(e))
+        
     threading.Thread(target=run_web, daemon=True).start()
     log_action("WEB_SERVER", "خادم الويب بدأ")
     
