@@ -1,111 +1,220 @@
-<div class="section">
-            <h2>⚙️ إعدادات السيرفر المتقدمة</h2>
-            <form method="POST" action="/update_settings">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>اختر السيرفر المتصل بالبوت</label>
-                        <select name="guild_id" id="guild_select" required style="padding: 12px; background: rgba(255, 255, 255, 0.08); border-radius: 8px;">
-                            <option value="">-- اختر السيرفر لتفعيل البوت فيه --</option>
-                            {% for guild in guilds %}
-                            <option value="{{ guild.id }}">{{ guild.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>قناة فتح التذاكر (Channel)</label>
-                        <select name="channel_id" id="channel_select" required style="padding: 12px; background: rgba(255, 255, 255, 0.08); border-radius: 8px;">
-                            <option value="">-- اختر السيرفر أولاً --</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>قناة السجل (Optional)</label>
-                        <select name="log_channel" id="log_channel_select" style="padding: 12px; background: rgba(255, 255, 255, 0.08); border-radius: 8px;">
-                            <option value="">-- اختر السيرفر أولاً --</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>فئة التذاكر / الكتالوج (Category - Optional)</label>
-                        <select name="category_id" id="category_select" style="padding: 12px; background: rgba(255, 255, 255, 0.08); border-radius: 8px;">
-                            <option value="">-- اختر السيرفر أولاً --</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>الرتب المسؤولة عن التذاكر (يمكنك اختيار أكثر من رتبة)</label>
-                    <select name="admin_roles" id="roles_select" multiple style="padding: 12px; background: rgba(255, 255, 255, 0.08); border-radius: 8px; height: 130px; overflow-y: auto;">
-                        <option value="">-- اختر السيرفر أولاً --</option>
-                    </select>
-                    <p style="font-size: 0.85em; color: #b0b0b0; margin-top: 5px;">* اضغط باستمرار على زر Ctrl (أو Cmd في الماك) أثناء النقر لتحديد أكثر من رتبة.</p>
-                </div>
-                <button type="submit">💾 حفظ الإعدادات وإطلاق التذاكر</button>
-            </form>
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phantom Bot - لوحة التحكم</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e1e2e 0%, #2d2d44 100%);
+            color: #fff;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+            animation: slideDown 0.5s ease-out;
+        }
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #00d4ff, #7c3aed);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 8px 16px;
+            background: #10b981;
+            border-radius: 20px;
+            font-size: 0.9em;
+            margin-top: 10px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+        .card {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            animation: fadeIn 0.6s ease-out;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+        .card h2 {
+            font-size: 1.2em;
+            margin-bottom: 15px;
+            color: #00d4ff;
+        }
+        .stat {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #7c3aed;
+            margin: 10px 0;
+        }
+        .stat-label {
+            font-size: 0.9em;
+            color: #b0b0b0;
+        }
+        .form-group {
+            margin: 15px 0;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #00d4ff;
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            color: #fff;
+            font-family: inherit;
+            transition: all 0.3s ease;
+        }
+        /* لتلوين خيارات الـ Select باللون الداكن ليناسب المتصفحات */
+        select option {
+            background: #2d2d44;
+            color: #fff;
+        }
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            background: rgba(255, 255, 255, 0.1);
+            border-color: #7c3aed;
+            box-shadow: 0 0 10px rgba(124, 58, 237, 0.3);
+        }
+        textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+        button {
+            background: linear-gradient(135deg, #7c3aed, #00d4ff);
+            color: #fff;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            width: 100%;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(124, 58, 237, 0.4);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        .section {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 30px;
+            backdrop-filter: blur(10px);
+            animation: fadeIn 0.7s ease-out;
+        }
+        .section h2 {
+            font-size: 1.8em;
+            margin-bottom: 20px;
+            color: #00d4ff;
+            border-bottom: 2px solid #7c3aed;
+            padding-bottom: 10px;
+        }
+        .section form {
+            display: grid;
+            gap: 15px;
+        }
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            header h1 {
+                font-size: 1.8em;
+            }
+        }
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>👻 Phantom Bot</h1>
+            <span class="status-badge">{{ status }}</span>
+            <p style="margin-top: 10px; color: #b0b0b0;">لوحة تحكم البوت المتقدمة</p>
+        </header>
+
+        <div class="grid">
+            <div class="card">
+                <h2>📊 الحالة</h2>
+                <div class="stat">{{ status }}</div>
+                <div class="stat-label">حالة الاتصال</div>
+            </div>
+            <div class="card">
+                <h2>👥 الأعضاء</h2>
+                <div class="stat">{{ member_count }}</div>
+                <div class="stat-label">عدد أعضاء السيرفر</div>
+            </div>
+            <div class="card">
+                <h2>⏱️ البينج</h2>
+                <div class="stat">{{ ping }}ms</div>
+                <div class="stat-label">سرعة الاتصال</div>
+            </div>
+            <div class="card">
+                <h2>🎫 التذاكر</h2>
+                <div class="stat">{{ open_tickets }}</div>
+                <div class="stat-label">تذاكر مفتوحة</div>
+            </div>
         </div>
 
-        <!-- برمجة تفاعلية لتحديث القوائم ديناميكياً عند اختيار السيرفر -->
-        <script>
-        document.getElementById('guild_select').addEventListener('change', function() {
-            const guildId = this.value;
-            const channelSelect = document.getElementById('channel_select');
-            const logChannelSelect = document.getElementById('log_channel_select');
-            const categorySelect = document.getElementById('category_select');
-            const rolesSelect = document.getElementById('roles_select');
-
-            // إظهار نص التحميل مؤقتاً
-            channelSelect.innerHTML = '<option value="">-- جاري تحميل القنوات... --</option>';
-            logChannelSelect.innerHTML = '<option value="">-- جاري تحميل القنوات... --</option>';
-            categorySelect.innerHTML = '<option value="">-- جاري تحميل الفئات... --</option>';
-            rolesSelect.innerHTML = '<option value="">-- جاري تحميل الرتب... --</option>';
-
-            if (!guildId) {
-                channelSelect.innerHTML = '<option value="">-- اختر السيرفر أولاً --</option>';
-                logChannelSelect.innerHTML = '<option value="">-- اختر السيرفر أولاً --</option>';
-                categorySelect.innerHTML = '<option value="">-- اختر السيرفر أولاً --</option>';
-                rolesSelect.innerHTML = '<option value="">-- اختر السيرفر أولاً --</option>';
-                return;
-            }
-
-            // الاتصال بنقطة الـ API في البوت لجلب معلومات السيرفر
-            fetch(`/api/guild_details/${guildId}`)
-                .then(res => res.json())
-                .then(data => {
-                    if (data.error) {
-                        alert("حدث خطأ: " + data.error);
-                        return;
-                    }
-
-                    // 1. ملء قائمة قنوات التذاكر
-                    let chOptions = '<option value="">-- اختر القناة المناسبة --</option>';
-                    data.channels.forEach(ch => {
-                        chOptions += `<option value="${ch.id}"># ${ch.name}</option>`;
-                    });
-                    channelSelect.innerHTML = chOptions;
-
-                    // 2. ملء قائمة قناة السجلات
-                    let logOptions = '<option value="">-- بدون قناة سجل (ملغاة) --</option>';
-                    data.channels.forEach(ch => {
-                        logOptions += `<option value="${ch.id}"># ${ch.name}</option>`;
-                    });
-                    logChannelSelect.innerHTML = logOptions;
-
-                    // 3. ملء قائمة فئات/كتالوج التذاكر
-                    let catOptions = '<option value="">-- بدون فئة (المستوى العام) --</option>';
-                    data.categories.forEach(cat => {
-                        catOptions += `<option value="${cat.id}">📁 ${cat.name}</option>`;
-                    });
-                    categorySelect.innerHTML = catOptions;
-
-                    // 4. ملء الرتب المسؤولين
-                    let roleOptions = '';
-                    data.roles.forEach(role => {
-                        roleOptions += `<option value="${role.id}">${role.name}</option>`;
-                    });
-                    rolesSelect.innerHTML = roleOptions || '<option value="">لا توجد رتب مهيأة بالسيرفر</option>';
-                })
-                .catch(err => {
-                    console.error(err);
-                    alert("فشل في استرداد معلومات السيرفر من البوت.");
-                });
-        });
-        </script>
+        <!-- قسم الإعدادات التفاعلية المطور -->
+        <div class="section">
+            <h2>⚙️ إعدادات السيرفر وا
