@@ -12,12 +12,15 @@ from logger_config import log_action, log_error, log_warning
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 FLASK_HOST = os.getenv('FLASK_HOST', '0.0.0.0')
-FLASK_PORT = int(os.getenv('FLASK_PORT', 8080))
+
+# تم تعديل المنفذ ليقرأ تلقائياً من المتغير PORT الخاص بـ Railway
+FLASK_PORT = int(os.getenv('PORT', 8080))
 
 MC_ROLES = ["Steve", "Alex", "Villager", "Zombie", "Creeper", "Enderman", "Skeleton", "Spider", "Piglin", "Ghast", 
             "Blaze", "Iron Golem", "Wither", "Ender Dragon", "Warden", "Herobrine", "Axolotl", "Bee", "Fox", "Wolf"]
 
-DB_PATH = 'phantom_pro.db'
+# تم تعديل مسار قاعدة البيانات ليدعم مساحة التخزين الدائمة
+DB_PATH = os.getenv('DB_PATH', 'phantom_pro.db')
 
 # --- البوت المطور ---
 class PhantomBot(commands.Bot):
@@ -176,15 +179,52 @@ def home():
         ping = round(bot.latency * 1000) if (bot.latency and not math.isnan(bot.latency)) else 0
         tickets = len([c for c in bot.get_all_channels() if "ticket-" in c.name])
         
+        # جلب قائمة السيرفرات المتصل بها البوت تلقائياً
+        guilds_list = []
+        if bot.is_ready():
+            for guild in bot.guilds:
+                guilds_list.append({
+                    'id': str(guild.id),
+                    'name': guild.name
+                })
+        
         return render_template('index.html', 
                              status=status, 
                              member_count=g.member_count if g else 0, 
                              ping=ping, 
                              open_tickets=tickets,
-                             bot_name=bot.user.name if bot.user else "البوت")
+                             bot_name=bot.user.name if bot.user else "البوت",
+                             guilds=guilds_list) # تمرير السيرفرات للواجهة
     except Exception as e:
         log_error("HOME_ROUTE", str(e))
         return "خطأ في التحميل", 500
+
+# نقطة برمجية جديدة (API) لجلب تفاصيل السيرفر بمجرد اختياره في الواجهة
+@app.route('/api/guild_details/<guild_id>')
+def guild_details(guild_id):
+    try:
+        if not bot.is_ready():
+            return jsonify({'error': 'البوت غير جاهز بعد'}), 503
+        
+        guild = bot.get_guild(int(guild_id))
+        if not guild:
+            return jsonify({'error': 'لم يتم العثور على السيرفر المطلوب'}), 404
+        
+        # جلب القنوات الكتابية
+        channels = [{'id': str(c.id), 'name': c.name} for c in guild.text_channels]
+        # جلب فئات السيرفر (Categories) لكي يحدد منها فئة التذاكر
+        categories = [{'id': str(cat.id), 'name': cat.name} for cat in guild.categories]
+        # جلب الرتب باستثناء رتبة الجميع @everyone ورتب البوتات التلقائية
+        roles = [{'id': str(r.id), 'name': r.name} for r in guild.roles if not r.is_default() and not r.managed]
+        
+        return jsonify({
+            'channels': channels,
+            'categories': categories,
+            'roles': roles
+        })
+    except Exception as e:
+        log_error("GUILD_DETAILS_API", str(e))
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/stats')
 def get_stats():
@@ -223,11 +263,20 @@ def update():
         if not valid:
             return f"<h1>❌ خطأ: {msg}</h1><a href='/'>رجوع</a>"
         
+        # دمج الرتب المتعددة وحفظها كنص مفصول بفاصلة
+        roles_list = request.form.getlist('admin_roles')
+        admin_roles_str = ",".join(roles_list)
+        
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        cursor.execute("INSERT OR REPLACE INTO config VALUES (?, ?, ?, ?, ?)", 
-                      (f['guild_id'], f.get('admin_roles', ''), f['channel_id'], 
-                       f.get('log_channel', ''), f.get('category_id', '')))
+        
+        # استعلام الحفظ والتعديل الآمن مع تصحيح الأعمدة الـ 6 لجدول config
+        cursor.execute("""
+            INSERT OR REPLACE INTO config (guild_id, admin_roles, channel_id, log_channel, category_id, created_at) 
+            VALUES (?, ?, ?, ?, ?, datetime('now'))
+        """, (f['guild_id'], admin_roles_str, f['channel_id'], 
+             f.get('log_channel', ''), f.get('category_id', '')))
+        
         conn.commit()
         conn.close()
         
