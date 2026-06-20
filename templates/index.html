@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Phantom_control</title>
+    <title>Phantom Bot - لوحة التحكم</title>
     <style>
         * {
             margin: 0;
@@ -214,79 +214,72 @@
             </div>
         </div>
 
-        <!-- قسم الإعدادات التفاعلية المطور -->
+        <!-- ⚙️ مركز إدارة التذاكر المتكامل (تم تجميعه بالكامل في مكان واحد) -->
         <div class="section">
-            <h2>⚙️ إعدادات السيرفر والتذاكر المتقدمة</h2>
-            <form method="POST" action="/update_settings">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>اختر السيرفر المتصل بالبوت</label>
-                        <select name="guild_id" id="guild_select" required>
-                            <option value="">-- اختر السيرفر لتفعيل البوت فيه --</option>
-                            {% for guild in guilds %}
-                            <option value="{{ guild.id }}">{{ guild.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>قناة فتح التذاكر (Channel)</label>
-                        <select name="channel_id" id="channel_select" required>
-                            <option value="">-- اختر السيرفر أولاً --</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>قناة السجل (Optional)</label>
-                        <select name="log_channel" id="log_channel_select">
-                            <option value="">-- اختر السيرفر أولاً --</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>فئة التذاكر / الكتالوج (Category - Optional)</label>
-                        <select name="category_id" id="category_select">
-                            <option value="">-- اختر السيرفر أولاً --</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>الرتب المسؤولة عن التذاكر (يمكنك اختيار أكثر من رتبة)</label>
-                    <select name="admin_roles" id="roles_select" multiple style="height: 140px; overflow-y: auto;">
-                        <option value="">-- اختر السيرفر أولاً --</option>
-                    </select>
-                    <p style="font-size: 0.85em; color: #b0b0b0; margin-top: 5px;">* اضغط باستمرار على زر Ctrl (أو Cmd في الماك) أثناء النقر لتحديد أكثر من رتبة.</p>
-                </div>
-                <button type="submit">💾 حفظ الإعدادات وإطلاق التذاكر</button>
-            </form>
-        </div>
-
-        <!-- قسم إدارة أسباب وفئات فتح التذاكر المطور حديثاً -->
-        <div class="section">
-            <h2>📋 إدارة فئات/أسباب التذاكر الحالية</h2>
-            <form method="POST" action="/add_ticket_reason">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>اختر السيرفر</label>
-                        <select name="guild_id" id="reason_guild_select" required>
-                            <option value="">-- اختر السيرفر --</option>
-                            {% for guild in guilds %}
-                            <option value="{{ guild.id }}">{{ guild.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>اكتب السبب / الخيار (مثال: دعم فني، تقديم شكوى، شراء رتبة)</label>
-                        <input type="text" name="reason" placeholder="أدخل اسم الخيار الجديد للتذكرة" required>
-                    </div>
-                </div>
-                <button type="submit">➕ إضافة خيار تذكرة جديد</button>
-            </form>
+            <h2>⚙️ مركز إدارة التذاكر المتكامل</h2>
             
-            <div style="margin-top: 25px;">
-                <h3 style="color: #00d4ff; margin-bottom: 10px;">الخيارات الحالية المضافة لهذا السيرفر:</h3>
-                <ul id="reasons_list" style="list-style-type: none; padding-right: 0;">
-                    <li style="color: #b0b0b0;">-- اختر السيرفر أولاً لعرض خياراته الحالية --</li>
-                </ul>
+            <!-- الخطوة الأولى والأهم: اختيار السيرفر -->
+            <div class="form-group" style="background: rgba(255, 255, 255, 0.03); padding: 20px; border-radius: 8px; border: 1px dashed rgba(255,255,255,0.15); margin-bottom: 25px;">
+                <label style="color: #00d4ff; font-size: 1.15em;">1️⃣ خطوة أولى: اختر السيرفر المراد تهيئته</label>
+                <select name="guild_id" id="guild_select" required style="font-size: 1.1em;">
+                    <option value="">-- اختر السيرفر لعرض إعداداته بالكامل --</option>
+                    {% for guild in guilds %}
+                    <option value="{{ guild.id }}">{{ guild.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- حاوية الإعدادات: ستظهر مخفية وتفتح تلقائياً بمجرد اختيار سيرفر -->
+            <div id="ticket_settings_wrapper" style="display: none; animation: fadeIn 0.4s ease-out;">
+                
+                <!-- القسم الفرعي الأول: إعدادات القنوات والرتب -->
+                <h3 style="color: #00d4ff; margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; margin-top: 20px;">2️⃣ قنوات التذاكر والرتب المسؤولة</h3>
+                <form method="POST" action="/update_settings">
+                    <!-- حقل مخفي لحفظ معرف السيرفر للربط التلقائي -->
+                    <input type="hidden" name="guild_id" id="hidden_guild_id">
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>قناة فتح التذاكر (Channel)</label>
+                            <select name="channel_id" id="channel_select" required></select>
+                        </div>
+                        <div class="form-group">
+                            <label>قناة السجل / اللوق (Log Channel - Optional)</label>
+                            <select name="log_channel" id="log_channel_select"></select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>فئة التذاكر / الكتالوج (Category - Optional)</label>
+                            <select name="category_id" id="category_select"></select>
+                        </div>
+                        <div class="form-group">
+                            <label>الرتب المصرح لها باستلام وإغلاق التذاكر</label>
+                            <select name="admin_roles" id="roles_select" multiple style="height: 130px; overflow-y: auto;"></select>
+                            <p style="font-size: 0.8em; color: #b0b0b0; margin-top: 5px;">* اضغط باستمرار على زر Ctrl (أو Cmd في الماك) لتحديد أكثر من رتبة مسؤولة.</p>
+                        </div>
+                    </div>
+                    <button type="submit" style="margin-bottom: 35px;">💾 حفظ إعدادات القنوات والرتب</button>
+                </form>
+
+                <!-- القسم الفرعي الثاني: أسباب وفئات التذاكر المخصصة -->
+                <h3 style="color: #00d4ff; margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px;">3️⃣ أسباب وفئات فتح التذاكر المخصصة للسيرفر</h3>
+                <form method="POST" action="/add_ticket_reason">
+                    <input type="hidden" name="guild_id" id="hidden_guild_id_reasons">
+                    
+                    <div class="form-row" style="grid-template-columns: 3fr 1fr; align-items: end;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label>اكتب السبب / الخيار الجديد (مثال: دعم فني، شراء رتبة، تقديم شكوى)</label>
+                            <input type="text" name="reason" placeholder="أدخل اسم خيار التذكرة الجديد هنا" required>
+                        </div>
+                        <button type="submit" style="height: 48px; padding: 0 15px;">➕ إضافة خيار</button>
+                    </div>
+                </form>
+
+                <div style="margin-top: 20px;">
+                    <h4 style="color: #b0b0b0; margin-bottom: 10px;">الخيارات المضافة حالياً للتذاكر في هذا السيرفر:</h4>
+                    <ul id="reasons_list" style="list-style-type: none; padding-right: 0;"></ul>
+                </div>
             </div>
         </div>
 
@@ -336,7 +329,7 @@
         </div>
     </div>
 
-    <!-- كود الجافا سكربت للربط الديناميكي الفوري لكافة السيرفرات وإدارة التذاكر -->
+    <!-- كود الجافا سكربت المطور للربط الشامل وإظهار كافة الإعدادات في مكان واحد فورياً -->
     <script>
     document.addEventListener("DOMContentLoaded", function () {
         const guildSelect = document.getElementById('guild_select');
@@ -345,26 +338,36 @@
         const categorySelect = document.getElementById('category_select');
         const rolesSelect = document.getElementById('roles_select');
 
-        // عناصر إدارة أسباب التذاكر
-        const reasonGuildSelect = document.getElementById('reason_guild_select');
+        // الحقول المخفية وحاوية الإعدادات المتكاملة
+        const settingsWrapper = document.getElementById('ticket_settings_wrapper');
+        const hiddenGuildId = document.getElementById('hidden_guild_id');
+        const hiddenGuildIdReasons = document.getElementById('hidden_guild_id_reasons');
         const reasonsList = document.getElementById('reasons_list');
 
         guildSelect.addEventListener('change', function () {
             const guildId = this.value;
 
             if (!guildId) {
-                channelSelect.innerHTML = `<option value="">-- اختر السيرفر أولاً --</option>`;
-                logChannelSelect.innerHTML = `<option value="">-- اختر السيرفر أولاً --</option>`;
-                categorySelect.innerHTML = `<option value="">-- اختر السيرفر أولاً --</option>`;
-                rolesSelect.innerHTML = `<option value="">-- اختر السيرفر أولاً --</option>`;
+                // إخفاء الواجهة بالكامل إذا لم يتم تحديد سيرفر
+                settingsWrapper.style.display = "none";
+                hiddenGuildId.value = "";
+                hiddenGuildIdReasons.value = "";
                 return;
             }
 
-            // إظهار نصوص التحميل المؤقتة
+            // تعبئة الحقول المخفية بمعرف السيرفر فوراً لربط استمارات الحفظ والتحديث
+            hiddenGuildId.value = guildId;
+            hiddenGuildIdReasons.value = guildId;
+
+            // إظهار واجهة الإعدادات المتكاملة فورياً
+            settingsWrapper.style.display = "block";
+
+            // إظهار نصوص التحميل المؤقتة في القوائم المنسدلة
             channelSelect.innerHTML = `<option value="">-- جاري تحميل القنوات... --</option>`;
             logChannelSelect.innerHTML = `<option value="">-- جاري تحميل القنوات... --</option>`;
             categorySelect.innerHTML = `<option value="">-- جاري تحميل الفئات... --</option>`;
             rolesSelect.innerHTML = `<option value="">-- جاري تحميل الرتب... --</option>`;
+            reasonsList.innerHTML = `<li style="color: #00d4ff;">-- جاري تحميل خيارات التذاكر الحالية... --</li>`;
 
             fetch(`/api/guild_details/${guildId}`)
                 .then(res => res.json())
@@ -374,7 +377,7 @@
                         return;
                     }
 
-                    // 1. إفراغ وتعبئة قنوات التذاكر
+                    // 1. إفراغ وتعبئة قنوات فتح التذاكر
                     channelSelect.innerHTML = '<option value="">-- اختر القناة المناسبة --</option>';
                     data.channels.forEach(ch => {
                         channelSelect.add(new Option(`# ${ch.name}`, ch.id));
@@ -386,7 +389,7 @@
                         logChannelSelect.add(new Option(`# ${ch.name}`, ch.id));
                     });
 
-                    // 3. إفراغ وتعبئة الفئات بالاعتماد على الفئات الفعلية (categories) وليس القنوات
+                    // 3. إفراغ وتعبئة فئات التذاكر (categories)
                     categorySelect.innerHTML = '<option value="">-- بدون فئة (المستوى العام) --</option>';
                     data.categories.forEach(cat => {
                         categorySelect.add(new Option(`📁 ${cat.name}`, cat.id));
@@ -397,30 +400,11 @@
                     data.roles.forEach(role => {
                         rolesSelect.add(new Option(role.name, role.id));
                     });
-                })
-                .catch(err => {
-                    console.error("Error fetching guild data:", err);
-                    alert("فشل في استرداد معلومات السيرفر من البوت.");
-                });
-        });
 
-        // فحص وتحديث خيارات التذاكر الحالية عند اختيار السيرفر في قسم الإدارة الثاني
-        reasonGuildSelect.addEventListener('change', function () {
-            const guildId = this.value;
-
-            if (!guildId) {
-                reasonsList.innerHTML = '<li style="color: #b0b0b0;">-- اختر السيرفر أولاً لعرض خياراته الحالية --</li>';
-                return;
-            }
-
-            reasonsList.innerHTML = '<li style="color: #00d4ff;">-- جاري تحميل خيارات التذاكر الحالية... --</li>';
-
-            fetch(`/api/guild_details/${guildId}`)
-                .then(res => res.json())
-                .then(data => {
+                    // 5. إفراغ وتعبئة قائمة أسباب التذاكر الحالية وتجهيز أزرار الحذف الفوري
                     reasonsList.innerHTML = '';
                     if (!data.reasons || data.reasons.length === 0) {
-                        reasonsList.innerHTML = '<li style="color: #b0b0b0; background: rgba(255,255,255,0.02); padding: 12px; border-radius: 8px;">لا توجد خيارات مضافة لهذا السيرفر حتى الآن. يمكنك إضافة خيار في الحقل بالأعلى.</li>';
+                        reasonsList.innerHTML = '<li style="color: #b0b0b0; background: rgba(255,255,255,0.02); padding: 12px; border-radius: 8px;">لا توجد أي خيارات مضافة للتذاكر في هذا السيرفر بعد.</li>';
                         return;
                     }
 
@@ -436,22 +420,19 @@
                     });
                 })
                 .catch(err => {
-                    console.error("Error loading reasons:", err);
-                    reasonsList.innerHTML = '<li style="color: #ff4d4d;">❌ فشل في استرداد قائمة خيارات التذاكر.</li>';
+                    console.error("Error fetching guild data:", err);
+                    alert("فشل في استرداد معلومات السيرفر من البوت.");
                 });
         });
 
-        // تشغيل فوري تلقائي في حال كان هناك سيرفر محدد مسبقاً عند فتح الصفحة
+        // تشغيل فوري تلقائي في حال كان هناك سيرفر محدد مسبقاً عند فتح الصفحة لضمان استقرار التحميل
         function triggerIfReady() {
             if (guildSelect && guildSelect.value && guildSelect.value.trim() !== "") {
                 guildSelect.dispatchEvent(new Event("change"));
             }
-            if (reasonGuildSelect && reasonGuildSelect.value && reasonGuildSelect.value.trim() !== "") {
-                reasonGuildSelect.dispatchEvent(new Event("change"));
-            }
         }
 
-        // محاولة تشغيل الفحص على فترات متباعدة للتأكد من اكتمال تحميل عناصر الصفحة
+        // فحص تلقائي متتابع للتأكد من جلب البيانات بشكل مستقر فور فتح الصفحة
         triggerIfReady();
         setTimeout(triggerIfReady, 500);
         setTimeout(triggerIfReady, 1000);
