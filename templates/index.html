@@ -260,6 +260,36 @@
             </form>
         </div>
 
+        <!-- قسم إدارة أسباب وفئات فتح التذاكر المطور حديثاً -->
+        <div class="section">
+            <h2>📋 إدارة فئات/أسباب التذاكر الحالية</h2>
+            <form method="POST" action="/add_ticket_reason">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>اختر السيرفر</label>
+                        <select name="guild_id" id="reason_guild_select" required>
+                            <option value="">-- اختر السيرفر --</option>
+                            {% for guild in guilds %}
+                            <option value="{{ guild.id }}">{{ guild.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>اكتب السبب / الخيار (مثال: دعم فني، تقديم شكوى، شراء رتبة)</label>
+                        <input type="text" name="reason" placeholder="أدخل اسم الخيار الجديد للتذكرة" required>
+                    </div>
+                </div>
+                <button type="submit">➕ إضافة خيار تذكرة جديد</button>
+            </form>
+            
+            <div style="margin-top: 25px;">
+                <h3 style="color: #00d4ff; margin-bottom: 10px;">الخيارات الحالية المضافة لهذا السيرفر:</h3>
+                <ul id="reasons_list" style="list-style-type: none; padding-right: 0;">
+                    <li style="color: #b0b0b0;">-- اختر السيرفر أولاً لعرض خياراته الحالية --</li>
+                </ul>
+            </div>
+        </div>
+
         <div class="section">
             <h2>🤖 الردود التلقائية</h2>
             <form method="POST" action="/add_auto_reply">
@@ -306,7 +336,7 @@
         </div>
     </div>
 
-    <!-- كود الجافا سكربت المطور والمطابق تماماً لسيرفر البوت -->
+    <!-- كود الجافا سكربت للربط الديناميكي الفوري لكافة السيرفرات وإدارة التذاكر -->
     <script>
     document.addEventListener("DOMContentLoaded", function () {
         const guildSelect = document.getElementById('guild_select');
@@ -314,6 +344,10 @@
         const logChannelSelect = document.getElementById('log_channel_select');
         const categorySelect = document.getElementById('category_select');
         const rolesSelect = document.getElementById('roles_select');
+
+        // عناصر إدارة أسباب التذاكر
+        const reasonGuildSelect = document.getElementById('reason_guild_select');
+        const reasonsList = document.getElementById('reasons_list');
 
         guildSelect.addEventListener('change', function () {
             const guildId = this.value;
@@ -332,7 +366,6 @@
             categorySelect.innerHTML = `<option value="">-- جاري تحميل الفئات... --</option>`;
             rolesSelect.innerHTML = `<option value="">-- جاري تحميل الرتب... --</option>`;
 
-            // تعديل الرابط ليتوافق تماماً مع الـ API المتواجد في main.py
             fetch(`/api/guild_details/${guildId}`)
                 .then(res => res.json())
                 .then(data => {
@@ -371,10 +404,50 @@
                 });
         });
 
+        // فحص وتحديث خيارات التذاكر الحالية عند اختيار السيرفر في قسم الإدارة الثاني
+        reasonGuildSelect.addEventListener('change', function () {
+            const guildId = this.value;
+
+            if (!guildId) {
+                reasonsList.innerHTML = '<li style="color: #b0b0b0;">-- اختر السيرفر أولاً لعرض خياراته الحالية --</li>';
+                return;
+            }
+
+            reasonsList.innerHTML = '<li style="color: #00d4ff;">-- جاري تحميل خيارات التذاكر الحالية... --</li>';
+
+            fetch(`/api/guild_details/${guildId}`)
+                .then(res => res.json())
+                .then(data => {
+                    reasonsList.innerHTML = '';
+                    if (!data.reasons || data.reasons.length === 0) {
+                        reasonsList.innerHTML = '<li style="color: #b0b0b0; background: rgba(255,255,255,0.02); padding: 12px; border-radius: 8px;">لا توجد خيارات مضافة لهذا السيرفر حتى الآن. يمكنك إضافة خيار في الحقل بالأعلى.</li>';
+                        return;
+                    }
+
+                    data.reasons.forEach(r => {
+                        reasonsList.innerHTML += `
+                            <li style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+                                <span>🔹 ${r.reason}</span>
+                                <form method="POST" action="/delete_ticket_reason/${r.id}" style="display: inline; margin: 0; padding: 0; width: auto;">
+                                    <button type="submit" style="background: linear-gradient(135deg, #ff4d4d, #cc0000); padding: 6px 12px; font-size: 0.85em; width: auto; border-radius: 6px;">حذف 🗑️</button>
+                                </form>
+                            </li>
+                        `;
+                    });
+                })
+                .catch(err => {
+                    console.error("Error loading reasons:", err);
+                    reasonsList.innerHTML = '<li style="color: #ff4d4d;">❌ فشل في استرداد قائمة خيارات التذاكر.</li>';
+                });
+        });
+
         // تشغيل فوري تلقائي في حال كان هناك سيرفر محدد مسبقاً عند فتح الصفحة
         function triggerIfReady() {
             if (guildSelect && guildSelect.value && guildSelect.value.trim() !== "") {
                 guildSelect.dispatchEvent(new Event("change"));
+            }
+            if (reasonGuildSelect && reasonGuildSelect.value && reasonGuildSelect.value.trim() !== "") {
+                reasonGuildSelect.dispatchEvent(new Event("change"));
             }
         }
 
