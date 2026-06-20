@@ -306,56 +306,83 @@
         </div>
     </div>
 
-    <!-- كود الجافا سكربت للربط الديناميكي الفوري -->
-<script>
-document.addEventListener("DOMContentLoaded", function () {
+    <!-- كود الجافا سكربت المطور والمطابق تماماً لسيرفر البوت -->
+    <script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const guildSelect = document.getElementById('guild_select');
+        const channelSelect = document.getElementById('channel_select');
+        const logChannelSelect = document.getElementById('log_channel_select');
+        const categorySelect = document.getElementById('category_select');
+        const rolesSelect = document.getElementById('roles_select');
 
-    const guildSelect = document.getElementById('guild_select');
-    const channelSelect = document.getElementById('channel_select');
-    const logChannelSelect = document.getElementById('log_channel_select');
-    const categorySelect = document.getElementById('category_select');
-    const rolesSelect = document.getElementById('roles_select');
+        guildSelect.addEventListener('change', function () {
+            const guildId = this.value;
 
-    guildSelect.addEventListener('change', function () {
-        const guildId = this.value;
+            if (!guildId) {
+                channelSelect.innerHTML = `<option value="">-- اختر السيرفر أولاً --</option>`;
+                logChannelSelect.innerHTML = `<option value="">-- اختر السيرفر أولاً --</option>`;
+                categorySelect.innerHTML = `<option value="">-- اختر السيرفر أولاً --</option>`;
+                rolesSelect.innerHTML = `<option value="">-- اختر السيرفر أولاً --</option>`;
+                return;
+            }
 
-        if (!guildId) {
-            channelSelect.innerHTML = `<option value="">-- اختر السيرفر أولاً --</option>`;
-            logChannelSelect.innerHTML = `<option value="">-- اختر السيرفر أولاً --</option>`;
-            categorySelect.innerHTML = `<option value="">-- اختر السيرفر أولاً --</option>`;
-            rolesSelect.innerHTML = `<option value="">-- اختر السيرفر أولاً --</option>`;
-            return;
+            // إظهار نصوص التحميل المؤقتة
+            channelSelect.innerHTML = `<option value="">-- جاري تحميل القنوات... --</option>`;
+            logChannelSelect.innerHTML = `<option value="">-- جاري تحميل القنوات... --</option>`;
+            categorySelect.innerHTML = `<option value="">-- جاري تحميل الفئات... --</option>`;
+            rolesSelect.innerHTML = `<option value="">-- جاري تحميل الرتب... --</option>`;
+
+            // تعديل الرابط ليتوافق تماماً مع الـ API المتواجد في main.py
+            fetch(`/api/guild_details/${guildId}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) {
+                        alert("حدث خطأ أثناء تحميل تفاصيل السيرفر: " + data.error);
+                        return;
+                    }
+
+                    // 1. إفراغ وتعبئة قنوات التذاكر
+                    channelSelect.innerHTML = '<option value="">-- اختر القناة المناسبة --</option>';
+                    data.channels.forEach(ch => {
+                        channelSelect.add(new Option(`# ${ch.name}`, ch.id));
+                    });
+
+                    // 2. إفراغ وتعبئة قنوات السجل
+                    logChannelSelect.innerHTML = '<option value="">-- بدون قناة سجل (ملغاة) --</option>';
+                    data.channels.forEach(ch => {
+                        logChannelSelect.add(new Option(`# ${ch.name}`, ch.id));
+                    });
+
+                    // 3. إفراغ وتعبئة الفئات بالاعتماد على الفئات الفعلية (categories) وليس القنوات
+                    categorySelect.innerHTML = '<option value="">-- بدون فئة (المستوى العام) --</option>';
+                    data.categories.forEach(cat => {
+                        categorySelect.add(new Option(`📁 ${cat.name}`, cat.id));
+                    });
+
+                    // 4. إفراغ وتعبئة الرتب المسؤولين
+                    rolesSelect.innerHTML = "";
+                    data.roles.forEach(role => {
+                        rolesSelect.add(new Option(role.name, role.id));
+                    });
+                })
+                .catch(err => {
+                    console.error("Error fetching guild data:", err);
+                    alert("فشل في استرداد معلومات السيرفر من البوت.");
+                });
+        });
+
+        // تشغيل فوري تلقائي في حال كان هناك سيرفر محدد مسبقاً عند فتح الصفحة
+        function triggerIfReady() {
+            if (guildSelect && guildSelect.value && guildSelect.value.trim() !== "") {
+                guildSelect.dispatchEvent(new Event("change"));
+            }
         }
 
-        fetch(`/get_guild_data?guild_id=${guildId}`)
-            .then(res => res.json())
-            .then(data => {
-
-                channelSelect.innerHTML = "";
-                logChannelSelect.innerHTML = "";
-                categorySelect.innerHTML = "";
-
-                data.channels.forEach(ch => {
-                    channelSelect.add(new Option(ch.name, ch.id));
-                    logChannelSelect.add(new Option(ch.name, ch.id));
-                    categorySelect.add(new Option(ch.name, ch.id));
-                });
-
-                rolesSelect.innerHTML = "";
-                data.roles.forEach(role => {
-                    rolesSelect.add(new Option(role.name, role.id));
-                });
-
-            })
-            .catch(err => console.error(err));
+        // محاولة تشغيل الفحص على فترات متباعدة للتأكد من اكتمال تحميل عناصر الصفحة
+        triggerIfReady();
+        setTimeout(triggerIfReady, 500);
+        setTimeout(triggerIfReady, 1000);
     });
-
-    // تشغيل تلقائي عند فتح الصفحة
-    window.addEventListener("load", () => {
-        if (guildSelect.value) {
-            guildSelect.dispatchEvent(new Event("change"));
-        }
-    });
-
-});
-</script>
+    </script>
+</body>
+</html>
