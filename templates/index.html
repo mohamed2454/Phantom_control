@@ -96,7 +96,6 @@
             font-family: inherit;
             transition: all 0.3s ease;
         }
-        /* لتلوين خيارات الـ Select باللون الداكن ليناسب المتصفحات */
         select option {
             background: #2d2d44;
             color: #fff;
@@ -217,4 +216,100 @@
 
         <!-- قسم الإعدادات التفاعلية المطور -->
         <div class="section">
-            <h2>⚙️ إعدادات السيرفر وا
+            <h2>⚙️ إعدادات السيرفر والتذاكر المتقدمة</h2>
+            <form method="POST" action="/update_settings">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>اختر السيرفر المتصل بالبوت</label>
+                        <select name="guild_id" id="guild_select" required>
+                            <option value="">-- اختر السيرفر لتفعيل البوت فيه --</option>
+                            {% for guild in guilds %}
+                            <option value="{{ guild.id }}">{{ guild.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>قناة فتح التذاكر (Channel)</label>
+                        <select name="channel_id" id="channel_select" required>
+                            <option value="">-- اختر السيرفر أولاً --</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>قناة السجل (Optional)</label>
+                        <select name="log_channel" id="log_channel_select">
+                            <option value="">-- اختر السيرفر أولاً --</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>فئة التذاكر / الكتالوج (Category - Optional)</label>
+                        <select name="category_id" id="category_select">
+                            <option value="">-- اختر السيرفر أولاً --</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>الرتب المسؤولة عن التذاكر (يمكنك اختيار أكثر من رتبة)</label>
+                    <select name="admin_roles" id="roles_select" multiple style="height: 140px; overflow-y: auto;">
+                        <option value="">-- اختر السيرفر أولاً --</option>
+                    </select>
+                    <p style="font-size: 0.85em; color: #b0b0b0; margin-top: 5px;">* اضغط باستمرار على زر Ctrl (أو Cmd في الماك) أثناء النقر لتحديد أكثر من رتبة.</p>
+                </div>
+                <button type="submit">💾 حفظ الإعدادات وإطلاق التذاكر</button>
+            </form>
+        </div>
+
+        <div class="section">
+            <h2>🤖 الردود التلقائية</h2>
+            <form method="POST" action="/add_auto_reply">
+                <div class="form-group">
+                    <label>الكلمة المفتاحية</label>
+                    <input type="text" name="keyword" placeholder="أدخل كلمة المفتاح" required>
+                </div>
+                <div class="form-group">
+                    <label>الرد</label>
+                    <textarea name="response" placeholder="أدخل الرد المطلوب" required></textarea>
+                </div>
+                <button type="submit">➕ إضافة رد تلقائي</button>
+            </form>
+            <div style="margin-top: 20px;">
+                <a href="/list_replies" style="display: inline-block; padding: 10px 20px; background: #7c3aed; color: #fff; text-decoration: none; border-radius: 8px; transition: all 0.3s ease;" onmouseover="this.style.background='#6d28d9'" onmouseout="this.style.background='#7c3aed'">📋 عرض جميع الردود</a>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>📢 البث للأعضاء</h2>
+            <form method="POST" action="/broadcast">
+                <div class="form-group">
+                    <label>معرف السيرفر</label>
+                    <input type="text" name="guild_id" placeholder="أدخل معرف السيرفر" required>
+                </div>
+                <div class="form-group">
+                    <label>الرسالة</label>
+                    <textarea name="msg" placeholder="أدخل الرسالة التي تريد بثها" required></textarea>
+                </div>
+                <button type="submit">🚀 إرسال البث</button>
+            </form>
+        </div>
+
+        <div class="section">
+            <h2>⛏️ إنشاء رتب Minecraft</h2>
+            <form method="POST" action="/create_mc_roles">
+                <div class="form-group">
+                    <label>معرف السيرفر</label>
+                    <input type="text" name="guild_id" placeholder="أدخل معرف السيرفر" required>
+                </div>
+                <p style="color: #b0b0b0; margin: 10px 0;">سيتم إنشاء 20 رتبة Minecraft مختلفة</p>
+                <button type="submit">✨ إنشاء الرتب</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- كود الجافا سكربت للربط الديناميكي الفوري -->
+    <script>
+    document.getElementById('guild_select').addEventListener('change', function() {
+        const guildId = this.value;
+        const channelSelect = document.getElementById('channel_select');
+        const logChannelSelect = document.getElementById('log_channel_select');
+        const categorySelect = document.getElementById('
