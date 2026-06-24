@@ -214,11 +214,10 @@
             </div>
         </div>
 
-        <!-- ⚙️ مركز إدارة التذاكر المتكامل (تم تجميعه بالكامل في مكان واحد) -->
+        <!-- ⚙️ مركز إدارة التذاكر المتكامل -->
         <div class="section">
             <h2>⚙️ مركز إدارة التذاكر المتكامل</h2>
             
-            <!-- الخطوة الأولى والأهم: اختيار السيرفر -->
             <div class="form-group" style="background: rgba(255, 255, 255, 0.03); padding: 20px; border-radius: 8px; border: 1px dashed rgba(255,255,255,0.15); margin-bottom: 25px;">
                 <label style="color: #00d4ff; font-size: 1.15em;">1️⃣ خطوة أولى: اختر السيرفر المراد تهيئته</label>
                 <select name="guild_id" id="guild_select" required style="font-size: 1.1em;">
@@ -229,13 +228,12 @@
                 </select>
             </div>
 
-            <!-- حاوية الإعدادات: ستظهر مخفية وتفتح تلقائياً بمجرد اختيار سيرفر -->
+            <!-- حاوية الإعدادات متكاملة -->
             <div id="ticket_settings_wrapper" style="display: none; animation: fadeIn 0.4s ease-out;">
                 
                 <!-- القسم الفرعي الأول: إعدادات القنوات والرتب -->
                 <h3 style="color: #00d4ff; margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; margin-top: 20px;">2️⃣ قنوات التذاكر والرتب المسؤولة</h3>
-                <form method="POST" action="/update_settings">
-                    <!-- حقل مخفي لحفظ معرف السيرفر للربط التلقائي -->
+                <form id="settings_form" method="POST" action="/update_settings">
                     <input type="hidden" name="guild_id" id="hidden_guild_id">
                     
                     <div class="form-row">
@@ -254,31 +252,36 @@
                             <select name="category_id" id="category_select"></select>
                         </div>
                         <div class="form-group">
-                            <label>الرتب المصرح لها باستلام وإغلاق التذاكر</label>
-                            <select name="admin_roles" id="roles_select" multiple style="height: 130px; overflow-y: auto;"></select>
-                            <p style="font-size: 0.8em; color: #b0b0b0; margin-top: 5px;">* اضغط باستمرار على زر Ctrl (أو Cmd في الماك) لتحديد أكثر من رتبة مسؤولة.</p>
+                            <label>الرتب المصرح لها باستلام وإغلاق التذاكر (رؤية التذاكر)</label>
+                            <!-- حاوية مربعات الاختيار (Checkboxes) المحدثة -->
+                            <div id="roles_checkboxes_container" style="max-height: 160px; overflow-y: auto; border: 1px solid rgba(255,255,255,0.2); padding: 12px; border-radius: 8px; background: rgba(255,255,255,0.05); display: flex; flex-direction: column; gap: 8px;">
+                                <!-- سيتم ملء مربعات الرتب برمجياً هنا -->
+                            </div>
+                            <p style="font-size: 0.8em; color: #b0b0b0; margin-top: 5px;">* قم بالتأشير على المربعات بجانب الرتب المصرح لها برؤية هذه التذاكر.</p>
                         </div>
                     </div>
                     <button type="submit" style="margin-bottom: 35px;">💾 حفظ إعدادات القنوات والرتب</button>
                 </form>
 
-                <!-- القسم الفرعي الثاني: أسباب وفئات التذاكر المخصصة -->
+                <!-- القسم الفرعي الثاني: أسباب وفئات التذاكر المخصصة (الحفظ محلياً أولاً بضغطة زر نهائية) -->
                 <h3 style="color: #00d4ff; margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px;">3️⃣ أسباب وفئات فتح التذاكر المخصصة للسيرفر</h3>
-                <form method="POST" action="/add_ticket_reason">
-                    <input type="hidden" name="guild_id" id="hidden_guild_id_reasons">
-                    
-                    <div class="form-row" style="grid-template-columns: 3fr 1fr; align-items: end;">
-                        <div class="form-group" style="margin-bottom: 0;">
-                            <label>اكتب السبب / الخيار الجديد (مثال: دعم فني، شراء رتبة، تقديم شكوى)</label>
-                            <input type="text" name="reason" placeholder="أدخل اسم خيار التذكرة الجديد هنا" required>
-                        </div>
-                        <button type="submit" style="height: 48px; padding: 0 15px;">➕ إضافة خيار</button>
+                
+                <div class="form-row" style="grid-template-columns: 3fr 1fr; align-items: end; margin-bottom: 15px;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label>اكتب السبب / الخيار الجديد (مثال: دعم فني، تقديم شكوى، شراء رتبة)</label>
+                        <input type="text" id="reason_input" placeholder="أدخل اسم خيار التذكرة هنا">
                     </div>
-                </form>
+                    <button type="button" id="add_local_reason_btn" style="height: 48px; padding: 0 15px; background: linear-gradient(135deg, #7c3aed, #00d4ff);">➕ إضافة للقائمة</button>
+                </div>
 
-                <div style="margin-top: 20px;">
-                    <h4 style="color: #b0b0b0; margin-bottom: 10px;">الخيارات المضافة حالياً للتذاكر في هذا السيرفر:</h4>
+                <div style="margin-top: 20px; background: rgba(255, 255, 255, 0.02); padding: 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
+                    <h4 style="color: #b0b0b0; margin-bottom: 10px;">الخيارات المضافة حالياً للتذاكر (اضغط "حفظ خيارات التذاكر" لحفظ القائمة):</h4>
                     <ul id="reasons_list" style="list-style-type: none; padding-right: 0;"></ul>
+                </div>
+
+                <!-- زر الحفظ النهائي لخيارات التذاكر في الأسفل -->
+                <div style="margin-top: 20px; display: flex; justify-content: flex-end;">
+                    <button type="button" id="save_reasons_btn" style="background: linear-gradient(135deg, #10b981, #059669); font-size: 1.1em; font-weight: bold; width: auto; padding: 12px 30px;">💾 حفظ خيارات التذاكر النهائية للسيرفر</button>
                 </div>
             </div>
         </div>
@@ -329,44 +332,77 @@
         </div>
     </div>
 
-    <!-- كود الجافا سكربت المطور للربط الشامل وإظهار كافة الإعدادات في مكان واحد فورياً -->
     <script>
     document.addEventListener("DOMContentLoaded", function () {
         const guildSelect = document.getElementById('guild_select');
         const channelSelect = document.getElementById('channel_select');
         const logChannelSelect = document.getElementById('log_channel_select');
         const categorySelect = document.getElementById('category_select');
-        const rolesSelect = document.getElementById('roles_select');
+        const rolesCheckboxesContainer = document.getElementById('roles_checkboxes_container');
+        const settingsForm = document.getElementById('settings_form');
 
-        // الحقول المخفية وحاوية الإعدادات المتكاملة
         const settingsWrapper = document.getElementById('ticket_settings_wrapper');
         const hiddenGuildId = document.getElementById('hidden_guild_id');
-        const hiddenGuildIdReasons = document.getElementById('hidden_guild_id_reasons');
         const reasonsList = document.getElementById('reasons_list');
+        
+        const reasonInput = document.getElementById('reason_input');
+        const addLocalReasonBtn = document.getElementById('add_local_reason_btn');
+        const saveReasonsBtn = document.getElementById('save_reasons_btn');
 
-        guildSelect.addEventListener('change', function () {
-            const guildId = this.value;
+        // مصفوفة محلية للاحتفاظ بالخيارات قبل الحفظ النهائي
+        let localReasons = [];
+        let selectedGuildId = "";
 
-            if (!guildId) {
-                // إخفاء الواجهة بالكامل إذا لم يتم تحديد سيرفر
-                settingsWrapper.style.display = "none";
-                hiddenGuildId.value = "";
-                hiddenGuildIdReasons.value = "";
+        // دالة لعرض الأسباب المضافة محلياً في القائمة
+        function renderLocalReasons() {
+            reasonsList.innerHTML = '';
+            if (localReasons.length === 0) {
+                reasonsList.innerHTML = '<li style="color: #b0b0b0; background: rgba(255,255,255,0.02); padding: 12px; border-radius: 8px;">لا توجد خيارات تذاكر مضافة حالياً للسيرفر. أضف سبباً جديداً بالأعلى!</li>';
                 return;
             }
 
-            // تعبئة الحقول المخفية بمعرف السيرفر فوراً لربط استمارات الحفظ والتحديث
-            hiddenGuildId.value = guildId;
-            hiddenGuildIdReasons.value = guildId;
+            localReasons.forEach((reason, index) => {
+                const li = document.createElement('li');
+                li.style.cssText = "background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;";
+                
+                const span = document.createElement('span');
+                span.textContent = `🔹 ${reason}`;
+                li.appendChild(span);
 
-            // إظهار واجهة الإعدادات المتكاملة فورياً
+                const deleteBtn = document.createElement('button');
+                deleteBtn.type = "button";
+                deleteBtn.style.cssText = "background: linear-gradient(135deg, #ff4d4d, #cc0000); padding: 6px 12px; font-size: 0.85em; width: auto; border-radius: 6px;";
+                deleteBtn.textContent = "حذف 🗑️";
+                deleteBtn.addEventListener('click', function() {
+                    localReasons.splice(index, 1);
+                    renderLocalReasons();
+                });
+
+                li.appendChild(deleteBtn);
+                reasonsList.appendChild(li);
+            });
+        }
+
+        // عند تغيير السيرفر المختار
+        guildSelect.addEventListener('change', function () {
+            const guildId = this.value;
+            selectedGuildId = guildId;
+
+            if (!guildId) {
+                settingsWrapper.style.display = "none";
+                hiddenGuildId.value = "";
+                localReasons = [];
+                return;
+            }
+
+            hiddenGuildId.value = guildId;
             settingsWrapper.style.display = "block";
 
-            // إظهار نصوص التحميل المؤقتة في القوائم المنسدلة
+            // رسائل جاري التحميل المؤقتة
             channelSelect.innerHTML = `<option value="">-- جاري تحميل القنوات... --</option>`;
             logChannelSelect.innerHTML = `<option value="">-- جاري تحميل القنوات... --</option>`;
             categorySelect.innerHTML = `<option value="">-- جاري تحميل الفئات... --</option>`;
-            rolesSelect.innerHTML = `<option value="">-- جاري تحميل الرتب... --</option>`;
+            rolesCheckboxesContainer.innerHTML = `<div style="color: #00d4ff;">-- جاري تحميل الرتب... --</div>`;
             reasonsList.innerHTML = `<li style="color: #00d4ff;">-- جاري تحميل خيارات التذاكر الحالية... --</li>`;
 
             fetch(`/api/guild_details/${guildId}`)
@@ -377,47 +413,63 @@
                         return;
                     }
 
-                    // 1. إفراغ وتعبئة قنوات فتح التذاكر
+                    // 1. تعبئة القنوات مع تحديد القناة المفعلة مسبقاً إن وجدت
                     channelSelect.innerHTML = '<option value="">-- اختر القناة المناسبة --</option>';
                     data.channels.forEach(ch => {
-                        channelSelect.add(new Option(`# ${ch.name}`, ch.id));
+                        const opt = new Option(`# ${ch.name}`, ch.id);
+                        if(data.config && data.config.channel_id === ch.id) opt.selected = true;
+                        channelSelect.add(opt);
                     });
 
-                    // 2. إفراغ وتعبئة قنوات السجل
+                    // 2. تعبئة قناة اللوج
                     logChannelSelect.innerHTML = '<option value="">-- بدون قناة سجل (ملغاة) --</option>';
                     data.channels.forEach(ch => {
-                        logChannelSelect.add(new Option(`# ${ch.name}`, ch.id));
+                        const opt = new Option(`# ${ch.name}`, ch.id);
+                        if(data.config && data.config.log_channel === ch.id) opt.selected = true;
+                        logChannelSelect.add(opt);
                     });
 
-                    // 3. إفراغ وتعبئة فئات التذاكر (categories)
+                    // 3. تعبئة الفئات
                     categorySelect.innerHTML = '<option value="">-- بدون فئة (المستوى العام) --</option>';
                     data.categories.forEach(cat => {
-                        categorySelect.add(new Option(`📁 ${cat.name}`, cat.id));
+                        const opt = new Option(`📁 ${cat.name}`, cat.id);
+                        if(data.config && data.config.category_id === cat.id) opt.selected = true;
+                        categorySelect.add(opt);
                     });
 
-                    // 4. إفراغ وتعبئة الرتب المسؤولين
-                    rolesSelect.innerHTML = "";
-                    data.roles.forEach(role => {
-                        rolesSelect.add(new Option(role.name, role.id));
-                    });
-
-                    // 5. إفراغ وتعبئة قائمة أسباب التذاكر الحالية وتجهيز أزرار الحذف الفوري
-                    reasonsList.innerHTML = '';
-                    if (!data.reasons || data.reasons.length === 0) {
-                        reasonsList.innerHTML = '<li style="color: #b0b0b0; background: rgba(255,255,255,0.02); padding: 12px; border-radius: 8px;">لا توجد أي خيارات مضافة للتذاكر في هذا السيرفر بعد.</li>';
-                        return;
+                    // 4. تعبئة مربعات الاختيار الخاصة بالرتب (Checkboxes) وتفعيل الرتب المفعلة مسبقاً
+                    rolesCheckboxesContainer.innerHTML = "";
+                    if(data.roles && data.roles.length > 0) {
+                        data.roles.forEach(role => {
+                            const label = document.createElement('label');
+                            label.style.cssText = "display: flex; align-items: center; gap: 10px; cursor: pointer; color: #fff; font-size: 0.95em;";
+                            
+                            const checkbox = document.createElement('input');
+                            checkbox.type = "checkbox";
+                            checkbox.name = "admin_roles";
+                            checkbox.value = role.id;
+                            checkbox.style.cssText = "width: 18px; height: 18px; cursor: pointer;";
+                            
+                            // التحقق من تفعيل الرتبة سابقاً
+                            if (data.config && data.config.admin_roles && data.config.admin_roles.includes(role.id)) {
+                                checkbox.checked = true;
+                            }
+                            
+                            label.appendChild(checkbox);
+                            
+                            const span = document.createElement('span');
+                            span.textContent = role.name;
+                            label.appendChild(span);
+                            
+                            rolesCheckboxesContainer.appendChild(label);
+                        });
+                    } else {
+                        rolesCheckboxesContainer.innerHTML = `<div style="color: #b0b0b0;">لا توجد رتب في هذا السيرفر.</div>`;
                     }
 
-                    data.reasons.forEach(r => {
-                        reasonsList.innerHTML += `
-                            <li style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
-                                <span>🔹 ${r.reason}</span>
-                                <form method="POST" action="/delete_ticket_reason/${r.id}" style="display: inline; margin: 0; padding: 0; width: auto;">
-                                    <button type="submit" style="background: linear-gradient(135deg, #ff4d4d, #cc0000); padding: 6px 12px; font-size: 0.85em; width: auto; border-radius: 6px;">حذف 🗑️</button>
-                                </form>
-                            </li>
-                        `;
-                    });
+                    // 5. تحميل أسباب التذاكر الحالية إلى المصفوفة المحلية وعرضها
+                    localReasons = data.reasons ? data.reasons.map(r => r.reason) : [];
+                    renderLocalReasons();
                 })
                 .catch(err => {
                     console.error("Error fetching guild data:", err);
@@ -425,17 +477,111 @@
                 });
         });
 
-        // تشغيل فوري تلقائي في حال كان هناك سيرفر محدد مسبقاً عند فتح الصفحة لضمان استقرار التحميل
+        // إضافة سبب جديد إلى القائمة المحلية المؤقتة
+        addLocalReasonBtn.addEventListener('click', function() {
+            const val = reasonInput.value.trim();
+            if (!val) {
+                alert("⚠️ يرجى كتابة السبب أولاً!");
+                return;
+            }
+            if (localReasons.includes(val)) {
+                alert("⚠️ هذا السبب مضاف بالفعل في القائمة!");
+                return;
+            }
+            localReasons.push(val);
+            reasonInput.value = "";
+            renderLocalReasons();
+        });
+
+        // تمكين الضغط على Enter في حقل إدخال السبب للإضافة السريعة
+        reasonInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addLocalReasonBtn.click();
+            }
+        });
+
+        // إرسال وحفظ أسباب التذاكر بالكامل دفعة واحدة (بدون إعادة تحميل)
+        saveReasonsBtn.addEventListener('click', function() {
+            if (!selectedGuildId) {
+                alert("⚠️ يرجى اختيار السيرفر أولاً!");
+                return;
+            }
+
+            saveReasonsBtn.disabled = true;
+            saveReasonsBtn.textContent = "⏳ جاري حفظ الخيارات...";
+
+            fetch('/api/save_ticket_reasons', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    guild_id: selectedGuildId,
+                    reasons: localReasons
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                saveReasonsBtn.disabled = false;
+                saveReasonsBtn.textContent = "💾 حفظ خيارات التذاكر النهائية للسيرفر";
+                if (data.success) {
+                    alert("✅ تم حفظ جميع خيارات التذاكر بنجاح ودون مغادرة الصفحة!");
+                } else {
+                    alert("❌ حدث خطأ أثناء الحفظ: " + (data.error || "خطأ غير معروف"));
+                }
+            })
+            .catch(err => {
+                saveReasonsBtn.disabled = false;
+                saveReasonsBtn.textContent = "💾 حفظ خيارات التذاكر النهائية للسيرفر";
+                console.error(err);
+                alert("❌ فشل الاتصال بالخادم لحفظ الأسباب.");
+            });
+        });
+
+        // اعتراض عملية حفظ الإعدادات الأساسية لكي تتم بالخلفية بدون تحديث الصفحة
+        settingsForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            const submitBtn = settingsForm.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            submitBtn.textContent = "⏳ جاري حفظ الإعدادات وقنوات التذاكر...";
+
+            const formData = new FormData(settingsForm);
+
+            fetch('/update_settings', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                submitBtn.disabled = false;
+                submitBtn.textContent = "💾 حفظ إعدادات القنوات والرتب";
+                if (data.success) {
+                    alert("✅ " + data.message);
+                } else {
+                    alert("❌ حدث خطأ: " + (data.error || "خطأ غير معروف"));
+                }
+            })
+            .catch(err => {
+                submitBtn.disabled = false;
+                submitBtn.textContent = "💾 حفظ إعدادات القنوات والرتب";
+                console.error(err);
+                alert("❌ فشل الاتصال بالسيرفر لحفظ إعدادات القنوات.");
+            });
+        });
+
+        // تشغيل التحقق التلقائي عند فتح الصفحة
         function triggerIfReady() {
             if (guildSelect && guildSelect.value && guildSelect.value.trim() !== "") {
                 guildSelect.dispatchEvent(new Event("change"));
             }
         }
-
-        // فحص تلقائي متتابع للتأكد من جلب البيانات بشكل مستقر فور فتح الصفحة
         triggerIfReady();
         setTimeout(triggerIfReady, 500);
-        setTimeout(triggerIfReady, 1000);
     });
     </script>
 </body>
