@@ -39,9 +39,8 @@ intents.message_content = True
 intents.guilds = True
 bot = PhantomBot(command_prefix="!", intents=intents)
 
-# دالة مساعدة للتحقق مما إذا كان العضو إدارياً (يمتلك صلاحية إدارية أو رتبة محددة من لوحة التحكم للتذاكر)
+# دالة مساعدة للتحقق مما إذا كان العضو إدارياً
 def is_ticket_admin(member, guild_id):
-    # إذا كان العضو مالك السيرفر أو يمتلك صلاحية المسؤول العام (Administrator)
     if member == member.guild.owner or member.guild_permissions.administrator:
         return True
     
@@ -70,7 +69,6 @@ class TicketActions(discord.ui.View):
     @discord.ui.button(label="استلام ✋", style=discord.ButtonStyle.primary, custom_id="c_final")
     async def claim(self, i, b):
         try:
-            # التحقق من الصلاحية الإدارية
             if not is_ticket_admin(i.user, i.guild.id):
                 await i.response.send_message("❌ هذا الإجراء مخصص للإداريين فقط!", ephemeral=True)
                 return
@@ -83,14 +81,12 @@ class TicketActions(discord.ui.View):
     @discord.ui.button(label="إغلاق 🔒", style=discord.ButtonStyle.danger, custom_id="l_final")
     async def close_ticket(self, i, b):
         try:
-            # التحقق من الصلاحية الإدارية
             if not is_ticket_admin(i.user, i.guild.id):
                 await i.response.send_message("❌ هذا الإجراء مخصص للإداريين فقط!", ephemeral=True)
                 return
 
             await i.response.defer()
             
-            # 1. جمع رسائل القناة لإنشاء سجل المحادثة (Transcript)
             messages = []
             messages.append(f"=== سجل محادثة التذكرة المغلقة: {i.channel.name} ===")
             messages.append(f"أغلقت بواسطة: {str(i.user)}")
@@ -104,20 +100,15 @@ class TicketActions(discord.ui.View):
                         messages.append(f"   └─ [ملف مرفق]: {att.url}")
             
             transcript_text = "\n".join(messages)
-            
-            # إنشاء الملف البرمجي مباشرة في الذاكرة
             file_data = io.BytesIO(transcript_text.encode('utf-8'))
             
-            # 2. إرسال سجل المحادثة للشخص الذي أغلق التذكرة في الخاص (DM)
             try:
                 file_data.seek(0)
                 file_to_user = discord.File(file_data, filename=f"transcript-{i.channel.name}.txt")
                 await i.user.send(f"📄 سجل محادثة التذكرة المغلقة `{i.channel.name}` الخاص بك:", file=file_to_user)
             except discord.Forbidden:
-                # العضو يغلق الخاص لديه
                 pass
             
-            # 3. إرسال السجل في قناة السجلات (Log Channel) إذا كانت مهيأة في قاعدة البيانات
             try:
                 conn = sqlite3.connect(DB_PATH)
                 cursor = conn.cursor()
@@ -146,7 +137,6 @@ class TicketActions(discord.ui.View):
             except Exception as log_err:
                 log_error("TICKET_LOG_TRANSCRIPT", str(log_err))
 
-            # 4. تسجيل العملية في قاعدة البيانات ثم حذف القناة
             log_action_db("TICKET_CLOSE", str(i.user.id), f"تم إغلاق تذكرة: {i.channel.name}")
             await i.channel.delete()
             
@@ -170,20 +160,17 @@ class TicketReasonSelect(discord.ui.Select):
             await i.response.defer()
             selected_id = self.values[0]
             
-            # العثور على اسم السبب المختار
             selected_text = "غير محدد"
             for opt in self.options:
                 if opt.value == selected_id:
                     selected_text = opt.label
                     break
             
-            # عرض تفاصيل التذكرة وتفعيل أزرار الإدارة
             embed = discord.Embed(
                 title="🎫 تفاصيل التذكرة الحالية",
                 description=f"**صاحب التذكرة:** {i.user.mention}\n**السبب المختار:** `{selected_text}`",
                 color=discord.Color.blue()
             )
-            # إزالة قائمة الاختيار من الرسالة ووضع أزرار الاستلام والإغلاق مكانها
             await i.edit_original_response(content="✅ تم تحديد سبب فتح التذكرة بنجاح.", embed=embed, view=TicketActions())
         except Exception as e:
             log_error("TICKET_REASON_SELECT_CALLBACK", str(e))
@@ -202,7 +189,6 @@ class TicketLaunch(discord.ui.View):
         try:
             await i.response.defer(ephemeral=True)
             
-            # جلب الخيارات المخصصة للتذاكر من قاعدة البيانات
             reasons = []
             try:
                 conn = sqlite3.connect(DB_PATH)
@@ -217,10 +203,8 @@ class TicketLaunch(discord.ui.View):
             await i.followup.send(f"✅ تم فتح تذكرتك: {ch.mention}", ephemeral=True)
             
             if reasons:
-                # إذا كانت هناك خيارات تم إدخالها من اللوحة، نرسل قائمة الاختيار أولاً
                 await ch.send(f"أهلاً {i.user.mention}\nالرجاء تحديد سبب فتح التذكرة من القائمة أدناه للبدء:", view=TicketReasonView(reasons))
             else:
-                # إذا لم تكن هناك خيارات، نرسل أزرار الإدارة مباشرة كالسابق
                 await ch.send(f"أهلاً {i.user.mention}\nاختر الإجراء المطلوب:", view=TicketActions())
                 
             log_action_db("TICKET_OPEN", str(i.user.id), f"فتح تذكرة جديدة: {ch.name}")
@@ -228,10 +212,8 @@ class TicketLaunch(discord.ui.View):
             log_error("TICKET_OPEN", str(e))
             await i.response.send_message("❌ حدث خطأ في فتح التذكرة!", ephemeral=True)
 
-# دالة مساعدة لتجهيز وإرسال رسالة التذاكر بالكامل داخل خيط البوت (Thread) لتفادي أخطاء الـ Event Loop
 async def send_ticket_launcher(channel_id):
     try:
-        # استخدام fetch_channel لضمان جلب القناة مباشرة من ديسكورد وتجنب الـ Cache الفارغ
         channel = await bot.fetch_channel(channel_id)
         if channel:
             await channel.send("🎫 فتح تذكرة", view=TicketLaunch())
@@ -248,8 +230,6 @@ async def send_ticket_launcher(channel_id):
 async def on_ready():
     log_action("BOT_READY", f"البوت {bot.user} متصل وجاهز للعمل")
     print(f"--- ✅ {bot.user} متصل ---")
-    
-    # نسخ احتياطي يومي
     backup_db()
 
 @bot.event
@@ -258,13 +238,10 @@ async def on_message(message):
         return
     
     try:
-        # التحقق من الحظر
         if is_user_banned(str(message.author.id), str(message.guild.id)):
             return
 
-        # --- ميزة إرسال صورة الخط الفاصل تلقائياً وحذف رسالة العضو ---
         if message.content.strip() == "خط":
-            # محاولة حذف رسالة العضو ليكون الشات منظماً
             try:
                 await message.delete()
             except discord.Forbidden:
@@ -272,14 +249,12 @@ async def on_message(message):
             except Exception as e:
                 log_error("LINE_COMMAND_DELETE", str(e))
 
-            # إرسال الصورة الفاصلة
             if os.path.exists("line.png"):
                 await message.channel.send(file=discord.File("line.png"))
             else:
                 await message.channel.send("⚠️ يرجى رفع صورة الخط الفاصل في مجلد البوت باسم `line.png` أولاً لكي أتمكن من إرسالها!")
             return
 
-        # --- نظام إضافة وإزالة رتب الماين كرافت عبر شات الديسكورد (+ / -) ---
         content = message.content.strip()
         if content.startswith('+') or content.startswith('-'):
             is_add = content.startswith('+')
@@ -287,10 +262,8 @@ async def on_message(message):
             
             if message.mentions:
                 target_member = message.mentions[0]
-                # تنظيف النص لاستخراج اسم الرتبة فقط بدون المنشن
                 role_query = raw_text.replace(target_member.mention, "").replace(f"<@!{target_member.id}>", "").strip()
                 
-                # البحث عن الرتبة المطابقة في قائمة MC_ROLES
                 matched_role_name = None
                 for r_name in MC_ROLES:
                     if r_name.lower() == role_query.lower() or r_name.lower() in role_query.lower():
@@ -298,12 +271,10 @@ async def on_message(message):
                         break
                 
                 if matched_role_name:
-                    # التحقق من صلاحية العضو المرسل للأمر
                     if not message.author.guild_permissions.manage_roles:
                         await message.channel.send("❌ لا تمتلك صلاحية `إدارة الرتب (Manage Roles)` لاستخدام هذا الأمر.")
                         return
                     
-                    # البحث عن الرتبة داخل السيرفر
                     guild_role = discord.utils.get(message.guild.roles, name=matched_role_name)
                     if not guild_role:
                         await message.channel.send(f"❌ لم يتم العثور على رتبة `{matched_role_name}` في السيرفر. قم بإنشائها أولاً من لوحة التحكم.")
@@ -320,25 +291,21 @@ async def on_message(message):
                         await message.channel.send("❌ البوت لا يملك صلاحية كافية لتعديل هذه الرتبة. تأكد من سحب رتبة البوت لتكون **أعلى** من رتب Minecraft في قائمة رتب السيرفر (Server Settings -> Roles).")
                     except Exception as e:
                         log_error("ROLE_CHANGE", str(e))
-                    return  # إيقاف المعالجة لعدم تداخلها مع الردود التلقائية
+                    return
 
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         
-        # الردود التلقائية
         cursor.execute("SELECT response FROM auto_replies WHERE keyword=?", (message.content,))
         r = cursor.fetchone()
         if r: 
             await message.channel.send(r[0])
         
-        # نظام الـ XP
         cursor.execute("INSERT OR IGNORE INTO levels (user_id, xp, level) VALUES (?, 0, 1)", (str(message.author.id),))
         cursor.execute("UPDATE levels SET xp = xp + 1 WHERE user_id = ?", (str(message.author.id),))
         conn.commit()
         
-        # حفظ السجل
         log_action_db("MESSAGE", str(message.author.id), f"رسالة في {message.guild.name}")
-        
         conn.close()
     except Exception as e:
         log_error("ON_MESSAGE", str(e))
@@ -348,7 +315,6 @@ async def on_message(message):
 # --- أوامر البوت ---
 @bot.command(name="xp")
 async def check_xp(ctx):
-    """فحص XP المستخدم"""
     try:
         xp, level = get_user_xp(ctx.author.id)
         embed = create_xp_embed(ctx.author, xp, level)
@@ -360,7 +326,6 @@ async def check_xp(ctx):
 @bot.command(name="warn")
 @commands.has_permissions(administrator=True)
 async def warn_user(ctx, user: discord.User, *, reason="بدون سبب"):
-    """إعطاء تحذير للمستخدم"""
     try:
         count = add_warning(str(user.id), str(ctx.guild.id), reason, str(ctx.author.id))
         embed = discord.Embed(
@@ -377,7 +342,6 @@ async def warn_user(ctx, user: discord.User, *, reason="بدون سبب"):
 @bot.command(name="ban")
 @commands.has_permissions(administrator=True)
 async def ban_user(ctx, user: discord.User, *, reason="بدون سبب"):
-    """حظر المستخدم"""
     try:
         if add_ban(str(user.id), str(ctx.guild.id), reason, str(ctx.author.id)):
             embed = discord.Embed(
@@ -404,7 +368,6 @@ def home():
         ping = round(bot.latency * 1000) if (bot.latency and not math.isnan(bot.latency)) else 0
         tickets = len([c for c in bot.get_all_channels() if "ticket-" in c.name])
         
-        # جلب قائمة السيرفرات المتصل بها البوت تلقائياً
         guilds_list = []
         if bot.is_ready():
             for guild in bot.guilds:
@@ -419,12 +382,12 @@ def home():
                              ping=ping, 
                              open_tickets=tickets,
                              bot_name=bot.user.name if bot.user else "البوت",
-                             guilds=guilds_list) # تمرير السيرفرات للواجهة
+                             guilds=guilds_list)
     except Exception as e:
         log_error("HOME_ROUTE", str(e))
         return "خطأ في التحميل", 500
 
-# نقطة برمجية لجلب تفاصيل السيرفر بمجرد اختياره في الواجهة (تم تطويرها لتشمل أسباب خيارات التذاكر)
+# نقطة برمجية مطورة لجلب تفاصيل السيرفر متضمنة الإعدادات الحالية
 @app.route('/api/guild_details/<guild_id>')
 def guild_details(guild_id):
     try:
@@ -435,27 +398,46 @@ def guild_details(guild_id):
         if not guild:
             return jsonify({'error': 'لم يتم العثور على السيرفر المطلوب'}), 404
         
-        # جلب القنوات الكتابية
         channels = [{'id': str(c.id), 'name': c.name} for c in guild.text_channels]
-        # جلب فئات السيرفر (Categories) لكي يحدد منها فئة التذاكر
         categories = [{'id': str(cat.id), 'name': cat.name} for cat in guild.categories]
-        # جلب الرتب باستثناء رتبة الجميع @everyone ورتب البوتات التلقائية
         roles = [{'id': str(r.id), 'name': r.name} for r in guild.roles if not r.is_default() and not r.managed]
         
-        # جلب خيارات التذاكر المضافة من لوحة التحكم من قاعدة البيانات
+        # جلب خيارات التذاكر المضافة
         reasons = []
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute("SELECT id, reason FROM ticket_reasons WHERE guild_id=?", (str(guild_id),))
         rows = cursor.fetchall()
+        
+        # جلب البيانات الحالية من الـ config لكي نعرضها افتراضياً
+        cursor.execute("SELECT admin_roles, channel_id, log_channel, category_id FROM config WHERE guild_id=?", (str(guild_id),))
+        cfg_row = cursor.fetchone()
         conn.close()
+        
+        config_data = {}
+        if cfg_row:
+            config_data = {
+                'admin_roles': cfg_row[0].split(',') if cfg_row[0] else [],
+                'channel_id': cfg_row[1],
+                'log_channel': cfg_row[2],
+                'category_id': cfg_row[3]
+            }
+        else:
+            config_data = {
+                'admin_roles': [],
+                'channel_id': '',
+                'log_channel': '',
+                'category_id': ''
+            }
+        
         reasons = [{'id': r[0], 'reason': r[1]} for r in rows]
         
         return jsonify({
             'channels': channels,
             'categories': categories,
             'roles': roles,
-            'reasons': reasons
+            'reasons': reasons,
+            'config': config_data
         })
     except Exception as e:
         log_error("GUILD_DETAILS_API", str(e))
@@ -463,7 +445,6 @@ def guild_details(guild_id):
 
 @app.route('/api/stats')
 def get_stats():
-    """الحصول على إحصائيات البوت"""
     try:
         status = "متصل ✅" if bot.is_ready() else "معطل ❌"
         g = bot.guilds[0] if bot.guilds else None
@@ -489,6 +470,7 @@ def get_stats():
         log_error("STATS_API", str(e))
         return jsonify({'error': str(e)}), 500
 
+# تعديل راوت التحديث لدعم طلبات AJAX و AJAX JSON بشكل مستقر
 @app.route('/update_settings', methods=['POST'])
 @require_admin
 def update():
@@ -496,16 +478,17 @@ def update():
         f = request.form
         valid, msg = validate_input(f, ['guild_id', 'channel_id'])
         if not valid:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.accept_mimetypes.accept_json:
+                return jsonify({'error': msg}), 400
             return f"<h1>❌ خطأ: {msg}</h1><a href='/'>رجوع</a>"
         
-        # دمج الرتب المتعددة وحفظها كنص مفصول بفاصلة
+        # جلب الرتب المحددة من مربعات الاختيار في الـ Form
         roles_list = request.form.getlist('admin_roles')
         admin_roles_str = ",".join(roles_list)
         
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         
-        # استعلام الحفظ والتعديل الآمن مع تصحيح الأعمدة الـ 6 لجدول config
         cursor.execute("""
             INSERT OR REPLACE INTO config (guild_id, admin_roles, channel_id, log_channel, category_id, created_at) 
             VALUES (?, ?, ?, ?, ?, datetime('now'))
@@ -515,57 +498,54 @@ def update():
         conn.commit()
         conn.close()
         
-        # استدعاء الدالة المساعدة بشكل آمن على خيط البوت لتفادي خطأ Event Loop
         asyncio.run_coroutine_threadsafe(
             send_ticket_launcher(int(f['channel_id'])), 
             bot.loop
         )
         
         log_action_db("SETTINGS_UPDATE", "unknown", f"تحديث إعدادات السيرفر {f['guild_id']}")
+        
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.accept_mimetypes.accept_json:
+            return jsonify({'success': True, 'message': 'تم حفظ الإعدادات بنجاح!'})
+            
         return "<h1>✅ تم الحفظ!</h1><a href='/'>رجوع</a>"
     except Exception as e:
         log_error("UPDATE_SETTINGS", str(e))
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.accept_mimetypes.accept_json:
+            return jsonify({'error': str(e)}), 500
         return f"<h1>❌ خطأ: {e}</h1><a href='/'>رجوع</a>"
 
-# راوت برمجية جديدة لإضافة خيارات/أسباب التذاكر من لوحة التحكم
-@app.route('/add_ticket_reason', methods=['POST'])
+# راوت الحفظ المجمع والنهائي لخيارات التذاكر دفعة واحدة
+@app.route('/api/save_ticket_reasons', methods=['POST'])
 @require_admin
-def add_ticket_reason():
+def save_ticket_reasons():
     try:
-        gid = request.form.get('guild_id')
-        reason = sanitize_input(request.form.get('reason', ''))
+        data = request.json
+        gid = data.get('guild_id')
+        reasons = data.get('reasons', [])
         
-        if not gid or not reason:
-            return "<h1>❌ السيرفر والسبب مطلوبان!</h1><a href='/'>رجوع</a>"
+        if not gid:
+            return jsonify({'error': 'معرف السيرفر مطلوب'}), 400
         
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        cursor.execute("INSERT INTO ticket_reasons (guild_id, reason) VALUES (?, ?)", (gid, reason))
+        
+        # مسح جميع الأسباب القديمة لإعادة حفظ القائمة النهائية والجديدة
+        cursor.execute("DELETE FROM ticket_reasons WHERE guild_id=?", (str(gid),))
+        
+        for r_text in reasons:
+            r_text = sanitize_input(r_text)
+            if r_text:
+                cursor.execute("INSERT INTO ticket_reasons (guild_id, reason) VALUES (?, ?)", (str(gid), r_text))
+                
         conn.commit()
         conn.close()
         
-        log_action_db("TICKET_REASON_ADD", "unknown", f"إضافة سبب تذكرة: {reason} للسيرفر {gid}")
-        return "<h1>✅ تمت إضافة السبب بنجاح!</h1><a href='/'>رجوع</a>"
+        log_action_db("TICKET_REASONS_SAVE", "unknown", f"تحديث أسباب التذاكر للسيرفر {gid}")
+        return jsonify({'success': True})
     except Exception as e:
-        log_error("ADD_REASON", str(e))
-        return f"<h1>❌ خطأ: {e}</h1><a href='/'>رجوع</a>"
-
-# راوت برمجية جديدة لحذف خيارات/أسباب التذاكر من لوحة التحكم
-@app.route('/delete_ticket_reason/<int:reason_id>', methods=['POST'])
-@require_admin
-def delete_ticket_reason(reason_id):
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM ticket_reasons WHERE id=?", (reason_id,))
-        conn.commit()
-        conn.close()
-        
-        log_action_db("TICKET_REASON_DELETE", "unknown", f"حذف خيار تذكرة رقم {reason_id}")
-        return "<h1>✅ تم حذف خيار التذكرة بنجاح!</h1><a href='/'>رجوع</a>"
-    except Exception as e:
-        log_error("DELETE_REASON", str(e))
-        return f"<h1>❌ خطأ: {e}</h1><a href='/'>رجوع</a>"
+        log_error("SAVE_REASONS_API", str(e))
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/add_auto_reply', methods=['POST'])
 @require_admin
@@ -592,7 +572,6 @@ def add_reply():
 
 @app.route('/list_replies')
 def list_replies():
-    """عرض جميع الردود التلقائية"""
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
@@ -626,7 +605,6 @@ def broadcast():
                 for m in guild.members:
                     if not m.bot:
                         try:
-                            # استخدام طريقة الأقواس الدائرية لدمج واستبدال الكلمات لتفادي أخطاء خوادم Railway والرموز التالفة
                             user_mention = f"<@{m.id}>"
                             personalized_msg = (
                                 msg.replace("{mention}", user_mention)
@@ -699,7 +677,6 @@ if __name__ == "__main__":
     log_action("APP_START", "بدء تطبيق Phantom Bot")
     init_db()
     
-    # التأكد من تهيئة الجدول الجديد لتخزين خيارات أسباب التذاكر تلقائياً لحماية قاعدة البيانات من الانهيار
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
